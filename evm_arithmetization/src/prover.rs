@@ -494,12 +494,29 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
-/// Returns a vector containing the data required to generate all the segments
-/// of a transaction.
+/// Returns a vector containing the data required to generate `max_segments`
+/// segments of a transaction. Optional `previous_segment_data` allows to start
+/// from an intermediary segment. If `max_segments` is `None`, the rest of the
+/// transaction will be generated.
+/// For aggregation purposes, the minimum amount of segments generated is 2. If
+/// only one segment is enough to finish the transaction, a dummy segment is
+/// appended.
+/// Returns the segment data, and a boolean indicating if the end
+/// of the transaction has been reached.
 pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
+    max_segments: Option<usize>,
     inputs: GenerationInputs,
-) -> anyhow::Result<Vec<GenerationSegmentData>> {
+    previous_segment_data: Option<GenerationSegmentData>,
+) -> anyhow::Result<(Vec<GenerationSegmentData>, bool)> {
+    assert!(
+        {
+            if let Some(max) = max_segments {
+                max >= 2
+            }
+        },
+        "`max_segments` must be at least 2."
+    );
     let mut all_seg_data = vec![];
 
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
@@ -509,25 +526,29 @@ pub fn generate_all_data_segments<F: RichField>(
         max_cpu_len_log,
     );
 
-    let mut segment_data = GenerationSegmentData {
-        registers_before: RegistersState::new(),
-        registers_after: RegistersState::new(),
-        memory: MemoryState::default(),
-        max_cpu_len_log,
-        extra_data: ExtraSegmentData {
-            trimmed_inputs: interpreter.generation_state.inputs.clone(),
-            bignum_modmul_result_limbs: interpreter
-                .generation_state
-                .bignum_modmul_result_limbs
-                .clone(),
-            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
-            withdrawal_prover_inputs: interpreter
-                .generation_state
-                .withdrawal_prover_inputs
-                .clone(),
-            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
-            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
-        },
+    let mut segment_data = if let Some(previous_data) = previous_segment_data {
+        previous_data
+    } else {
+        GenerationSegmentData {
+            registers_before: RegistersState::new(),
+            registers_after: RegistersState::new(),
+            memory: MemoryState::default(),
+            extra_data: ExtraSegmentData {
+                trimmed_inputs: interpreter.generation_state.inputs.clone(),
+                bignum_modmul_result_limbs: interpreter
+                    .generation_state
+                    .bignum_modmul_result_limbs
+                    .clone(),
+                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+                withdrawal_prover_inputs: interpreter
+                    .generation_state
+                    .withdrawal_prover_inputs
+                    .clone(),
+                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            },
+            max_cpu_len_log,
+        }
     };
 
     while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
@@ -542,6 +563,15 @@ pub fn generate_all_data_segments<F: RichField>(
         // Set `registers_after` correctly and push the data.
         segment_data.registers_after = updated_registers;
         all_seg_data.push(segment_data);
+
+        if let Some(max_segments) = max_segments {
+            if all_seg_data.len() == max_segments {
+                return Ok((
+                    all_seg_data,
+                    updated_registers.program_counter == KERNEL.global_labels["halt"],
+                ));
+            }
+        }
 
         segment_data = GenerationSegmentData {
             registers_before: updated_registers,
@@ -576,7 +606,7 @@ pub fn generate_all_data_segments<F: RichField>(
         all_seg_data.push(dummy_seg);
     }
 
-    Ok(all_seg_data)
+    Ok((all_seg_data, true))
 }
 
 /// A utility module designed to test witness generation externally.
@@ -616,8 +646,11 @@ pub mod testing {
         C: GenericConfig<D, F = F>,
     {
         let mut segment_idx = 0;
-        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
-
+        let (data, _) = timed!(
+            timing,
+            "Data generation",
+            generate_all_data_segments::<F>(Some(max_cpu_len_log), None, inputs.clone(), None)?
+        );
         let mut proofs = Vec::with_capacity(data.len());
         for mut d in data {
             let proof = prove(

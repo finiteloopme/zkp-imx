@@ -1537,8 +1537,13 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        let mut all_data_segments =
-            generate_all_data_segments::<F>(Some(max_cpu_len_log), generation_inputs.clone())?;
+        let (all_data_segments, _) = generate_all_data_segments::<F>(
+            Some(max_cpu_len_log),
+            None,
+            generation_inputs.clone(),
+            None,
+        )?;
+        println!("generation done");
         let mut proofs = Vec::with_capacity(all_data_segments.len());
         for mut data in all_data_segments {
             let proof = self.prove_segment(
