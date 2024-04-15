@@ -513,6 +513,8 @@ pub fn generate_all_data_segments<F: RichField>(
         {
             if let Some(max) = max_segments {
                 max >= 2
+            } else {
+                true
             }
         },
         "`max_segments` must be at least 2."
