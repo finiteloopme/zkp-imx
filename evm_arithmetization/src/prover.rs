@@ -500,7 +500,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 pub fn generate_next_segment<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: &GenerationInputs,
-    previous_segment_data: Option<&GenerationSegmentData>,
+    previous_segment_data: Option<GenerationSegmentData>,
 ) -> Option<GenerationSegmentData> {
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
         KERNEL.global_labels["init"],
@@ -513,7 +513,7 @@ pub fn generate_next_segment<F: RichField>(
         if previous.registers_after.program_counter == KERNEL.global_labels["halt"] {
             return None;
         }
-        previous.clone()
+        previous
     } else {
         GenerationSegmentData {
             registers_before: RegistersState::new(),
