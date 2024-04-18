@@ -57,6 +57,18 @@ pub struct GenerationSegmentData {
     pub(crate) max_cpu_len_log: Option<usize>,
 }
 
+/// Dummy data used for padding.
+pub fn make_dummy_segment_data(template: GenerationSegmentData) -> GenerationSegmentData {
+    assert!(
+        template.registers_after.program_counter == KERNEL.global_labels["halt"],
+        "Dummy segment isn't terminal."
+    );
+    GenerationSegmentData {
+        registers_before: template.registers_after,
+        ..template
+    }
+}
+
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -651,11 +663,7 @@ pub fn generate_all_data_segments<F: RichField>(
 
     // We need at least two segments to prove a segment aggregation.
     if all_seg_data.len() == 1 {
-        let dummy_seg = GenerationSegmentData {
-            registers_before: segment_data.registers_after,
-            ..segment_data
-        };
-        all_seg_data.push(dummy_seg);
+        all_seg_data.push(make_dummy_segment_data(segment_data));
     }
 
     Ok(all_seg_data)
