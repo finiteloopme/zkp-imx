@@ -494,6 +494,88 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
+/// Generate data for one segment. Returns `None` if `previous_segment_data` is
+/// already the last segment of a transaction, or if there was an issue when
+/// running the segment.
+pub fn generate_next_segment<F: RichField>(
+    max_cpu_len_log: Option<usize>,
+    inputs: GenerationInputs,
+    previous_segment_data: Option<GenerationSegmentData>,
+) -> Option<GenerationSegmentData> {
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+        KERNEL.global_labels["init"],
+        vec![],
+        &inputs,
+        max_cpu_len_log,
+    );
+
+    let mut segment_data = if let Some(previous) = previous_segment_data {
+        if previous.registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return None;
+        }
+        previous
+    } else {
+        GenerationSegmentData {
+            registers_before: RegistersState::new(),
+            registers_after: RegistersState::new(),
+            memory: MemoryState::default(),
+            max_cpu_len_log,
+            extra_data: ExtraSegmentData {
+                trimmed_inputs: interpreter.generation_state.inputs.clone(),
+                bignum_modmul_result_limbs: interpreter
+                    .generation_state
+                    .bignum_modmul_result_limbs
+                    .clone(),
+                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+                withdrawal_prover_inputs: interpreter
+                    .generation_state
+                    .withdrawal_prover_inputs
+                    .clone(),
+                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            },
+        }
+    };
+
+    interpreter.generation_state.registers = segment_data.registers_after;
+    interpreter.generation_state.registers.program_counter = KERNEL.global_labels["init"];
+    interpreter.generation_state.registers.is_kernel = true;
+    interpreter.clock = 0;
+
+    let run_result = set_registers_and_run(segment_data.registers_after, &mut interpreter);
+    if let Ok((updated_registers, mem_after)) = run_result {
+        // Set `registers_after` correctly and push the data.
+        segment_data.registers_after = updated_registers;
+
+        segment_data = GenerationSegmentData {
+            registers_before: updated_registers,
+            // `registers_after` will be set correctly at the next iteration.`
+            registers_after: updated_registers,
+            max_cpu_len_log,
+            memory: mem_after
+                .expect("The interpreter was running, so it should have returned a MemoryState"),
+            extra_data: ExtraSegmentData {
+                trimmed_inputs: interpreter.generation_state.inputs.clone(),
+                bignum_modmul_result_limbs: interpreter
+                    .generation_state
+                    .bignum_modmul_result_limbs
+                    .clone(),
+                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+                withdrawal_prover_inputs: interpreter
+                    .generation_state
+                    .withdrawal_prover_inputs
+                    .clone(),
+                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            },
+        };
+
+        Some(segment_data)
+    } else {
+        return None;
+    }
+}
+
 /// Returns a vector containing the data required to generate all the segments
 /// of a transaction.
 pub fn generate_all_data_segments<F: RichField>(
