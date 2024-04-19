@@ -272,13 +272,18 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
         nb_segments: 0,
     };
 
-    let all_segment_proofs: Vec<_> = data_iterator
+    let all_data: Vec<_> = data_iterator.collect();
+
+    println!("{} segments generated.", all_data.len());
+
+    let all_segment_proofs: Vec<_> = all_data
+        .iter()
         .map(|(txn, data)| {
             all_circuits
                 .prove_segment(
                     &all_stark,
                     &config,
-                    txn,
+                    txn.clone(),
                     &mut data.clone(),
                     &mut timing,
                     None,
