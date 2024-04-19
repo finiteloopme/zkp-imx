@@ -8,7 +8,10 @@ use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::{generate_all_data_segments, prove};
+use evm_arithmetization::prover::{
+    generate_all_data_segments, generate_next_segment, make_dummy_segment_data, prove,
+    GenerationSegmentData,
+};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, GenerationInputs, Node};
 use hex_literal::hex;
@@ -227,24 +230,81 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let max_cpu_len_log = 14;
 
-    let all_segment_proofs = &all_circuits.prove_all_segments(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len_log,
-        &mut timing,
-        None,
-    )?;
+    struct SegmentDataIterator {
+        current_data: Option<GenerationSegmentData>,
+        inputs: GenerationInputs,
+        max_cpu_len_log: Option<usize>,
+        nb_segments: usize,
+    }
 
-    for segment_proof in all_segment_proofs {
+    impl Iterator for SegmentDataIterator {
+        type Item = (GenerationInputs, GenerationSegmentData);
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let next_data = generate_next_segment::<F>(
+                self.max_cpu_len_log,
+                &self.inputs,
+                self.current_data.clone(),
+            );
+
+            if next_data.is_some() {
+                self.nb_segments += 1;
+                self.current_data = next_data.clone();
+                Some((
+                    self.inputs.clone(),
+                    next_data.expect("Data cannot be `None`."),
+                ))
+            } else {
+                if self.nb_segments == 1 {
+                    let data = self.current_data.clone().expect("eyo");
+                    Some((self.inputs.clone(), make_dummy_segment_data(data)))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    let data_iterator = SegmentDataIterator {
+        current_data: None,
+        inputs: inputs.clone(),
+        max_cpu_len_log: Some(max_cpu_len_log),
+        nb_segments: 0,
+    };
+
+    let all_segment_proofs: Vec<_> = data_iterator
+        .map(|(txn, data)| {
+            all_circuits
+                .prove_segment(
+                    &all_stark,
+                    &config,
+                    txn,
+                    &mut data.clone(),
+                    &mut timing,
+                    None,
+                )
+                .expect("Segments should be provable.")
+        })
+        .collect();
+
+    // let all_segment_proofs = &all_circuits.prove_all_segments(
+    //     &all_stark,
+    //     &config,
+    //     inputs.clone(),
+    //     max_cpu_len_log,
+    //     &mut timing,
+    //     None,
+    // )?;
+
+    assert_eq!(all_segment_proofs.len(), 3);
+
+    for segment_proof in &all_segment_proofs {
         let ProverOutputData {
             proof_with_pis: proof,
             ..
         } = segment_proof;
         all_circuits.verify_root(proof.clone())?;
     }
-
-    assert_eq!(all_segment_proofs.len(), 3);
 
     let (first_aggreg_proof, first_aggreg_pv) = all_circuits.prove_segment_aggregation(
         false,
