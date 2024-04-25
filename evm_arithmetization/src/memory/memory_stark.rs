@@ -383,6 +383,16 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         }
     }
 
+    fn get_all_mem_addr(mem_ops: &[MemoryOp]) -> Vec<MemoryAddress> {
+        let mut addrs = vec![];
+        for op in mem_ops {
+            if !addrs.contains(&op.address) {
+                addrs.push(op.address);
+            }
+        }
+        addrs
+    }
+
     pub(crate) fn generate_trace(
         &self,
         mut memory_ops: Vec<MemoryOp>,
@@ -390,6 +400,23 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         stale_contexts: Vec<usize>,
         timing: &mut TimingTree,
     ) -> (Vec<PolynomialValues<F>>, Vec<Vec<F>>, usize) {
+        let mut all_counts = [0; 35];
+        let mut total = 0;
+
+        let addrs = Self::get_all_mem_addr(&memory_ops);
+        for op in mem_before_values {
+            if !addrs.contains(&op.0) {
+                let segment = op.0.segment;
+                all_counts[segment] += 1;
+                total += 1;
+            }
+        }
+
+        log::info!(
+            "all counts {:?}, total nb of eliminated addresses {:?}",
+            all_counts,
+            total
+        );
         // First, push `mem_before` operations.
         for &(address, value) in mem_before_values {
             memory_ops.push(MemoryOp {
