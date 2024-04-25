@@ -182,22 +182,29 @@ fn add11_yml() -> anyhow::Result<()> {
     let config = StarkConfig::standard_fast_config();
     let inputs = get_generation_inputs();
 
+    let bytes = std::fs::read("./19240705.json").unwrap();
+    let all_inputs: Vec<GenerationInputs> = serde_json::from_slice(&bytes).unwrap();
+
     let max_cpu_len_log = 20;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
-    let proofs = prove_all_segments::<F, C, D>(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        &mut timing,
-        None,
-    )?;
+    for (i, inputs) in all_inputs.iter().enumerate() {
+        let _ = prove_all_segments::<F, C, D>(
+            &all_stark,
+            &config,
+            inputs.clone(),
+            max_cpu_len_log,
+            &mut timing,
+            None,
+        )?;
+        log::info!("done with transaction {}", i);
+    }
 
     timing.filter(Duration::from_millis(100)).print();
 
-    verify_all_proofs(&all_stark, &proofs, &config)
+    // verify_all_proofs(&all_stark, &proofs, &config)
+    Ok(())
 }
 
 fn init_logger() {

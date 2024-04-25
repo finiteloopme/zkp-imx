@@ -384,12 +384,28 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
     }
 
     fn get_all_mem_addr(mem_ops: &[MemoryOp]) -> Vec<MemoryAddress> {
+        let mut all_seg_data = 0;
+        let mut all_rlp_data = 0;
+        let mut all_kernel_data = 0;
         let mut addrs = vec![];
         for op in mem_ops {
             if !addrs.contains(&op.address) {
                 addrs.push(op.address);
+                if op.address.segment == 12 {
+                    all_rlp_data += 1;
+                } else if op.address.segment == 13 {
+                    all_seg_data += 1;
+                } else if op.address.segment == 0 && op.address.context == 0 {
+                    all_kernel_data += 1;
+                }
             }
         }
+        log::info!(
+            "Before mem_before: full trie data segment {:?}, full rlp seg {:?}, full kernel segment {}",
+            all_seg_data,
+            all_rlp_data,
+            all_kernel_data
+        );
         addrs
     }
 
@@ -404,6 +420,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         let mut total = 0;
 
         let addrs = Self::get_all_mem_addr(&memory_ops);
+
         for op in mem_before_values {
             if !addrs.contains(&op.0) {
                 let segment = op.0.segment;

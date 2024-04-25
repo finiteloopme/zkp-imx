@@ -1,0 +1,95 @@
+   Compiling evm_arithmetization v0.1.3 (/Users/lindaguiga/toposware/zk_evm/evm_arithmetization)
+   Compiling trace_decoder v0.3.0 (/Users/lindaguiga/toposware/zk_evm/trace_decoder)
+   Compiling proof_gen v0.1.3 (/Users/lindaguiga/toposware/zk_evm/proof_gen)
+    Finished `release` profile [optimized] target(s) in 51.63s
+     Running unittests src/lib.rs (target/release/deps/evm_arithmetization-cdf1265fc0e968b5)
+
+running 2 tests
+test cpu::kernel::tests::add11::test_add11_yml ... ok
+test cpu::kernel::tests::add11::test_add11_yml_with_exception ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 193 filtered out; finished in 3.95s
+
+     Running tests/add11_yml.rs (target/release/deps/add11_yml-bc021d818b0e7de6)
+
+running 1 test
+[2024-04-25T17:35:51Z INFO  evm_arithmetization::generation::state] CPU halted after 416601 cycles
+[2024-04-25T17:35:51Z INFO  evm_arithmetization::generation] CPU trace padded to 524288 cycles
+[2024-04-25T17:36:20Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 4313, full rlp seg 68963, full kernel segment 18061
+[2024-04-25T17:36:23Z INFO  evm_arithmetization::memory::memory_stark] all counts [41498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 41594
+[2024-04-25T17:36:24Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 71470, byte_packing_len: 116301, cpu_len: 524288, keccak_len: 30960, keccak_sponge_len: 1290, logic_len: 15428, memory_len: 1751377 }, mem_before_len: 59815, mem_after_len: 134483
+[2024-04-25T17:36:44Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:36:44Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:36:44Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:36:44Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 0, 22, 1, 64, 0, 0, 16, 71, 68963, 4313, 253, 0, 32, 0, 0, 0, 0, 32, 43, 0, 256, 0, 3, 245, 44, 120, 15, 6, 0, 0, 0], total nb of eliminated addresses 133940
+[2024-04-25T17:36:44Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 135195 }, mem_before_len: 134483, mem_after_len: 134483
+[2024-04-25T17:36:46Z INFO  add11_yml] done with transaction 0
+test add11_yml has been running for over 60 seconds
+[2024-04-25T17:36:47Z INFO  evm_arithmetization::generation::state] CPU halted after 485526 cycles
+[2024-04-25T17:36:47Z INFO  evm_arithmetization::generation] CPU trace padded to 524288 cycles
+[2024-04-25T17:37:27Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 5894, full rlp seg 84689, full kernel segment 19460
+[2024-04-25T17:37:31Z INFO  evm_arithmetization::memory::memory_stark] all counts [40099, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 40196
+[2024-04-25T17:37:31Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 82353, byte_packing_len: 136242, cpu_len: 524288, keccak_len: 35784, keccak_sponge_len: 1491, logic_len: 18414, memory_len: 2040017 }, mem_before_len: 59815, mem_after_len: 152083
+[2024-04-25T17:37:58Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:37:58Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:37:58Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:37:58Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 32, 22, 1, 64, 0, 0, 16, 264, 84689, 5894, 253, 0, 32, 0, 0, 0, 0, 34, 47, 0, 256, 0, 4, 283, 49, 134, 19, 6, 0, 0, 0], total nb of eliminated addresses 151540
+[2024-04-25T17:37:58Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 152795 }, mem_before_len: 152083, mem_after_len: 152083
+[2024-04-25T17:38:00Z INFO  add11_yml] done with transaction 1
+[2024-04-25T17:38:01Z INFO  evm_arithmetization::generation::state] CPU halted after 430773 cycles
+[2024-04-25T17:38:01Z INFO  evm_arithmetization::generation] CPU trace padded to 524288 cycles
+[2024-04-25T17:38:34Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 5300, full rlp seg 71743, full kernel segment 18735
+[2024-04-25T17:38:38Z INFO  evm_arithmetization::memory::memory_stark] all counts [40824, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 40920
+[2024-04-25T17:38:38Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 73212, byte_packing_len: 120222, cpu_len: 524288, keccak_len: 35256, keccak_sponge_len: 1469, logic_len: 16748, memory_len: 1829207 }, mem_before_len: 59815, mem_after_len: 138263
+[2024-04-25T17:39:02Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:39:02Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:39:02Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:39:02Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 0, 22, 1, 64, 0, 0, 16, 90, 71743, 5300, 253, 0, 32, 0, 0, 0, 0, 32, 39, 0, 256, 0, 3, 245, 43, 117, 17, 6, 0, 0, 0], total nb of eliminated addresses 137720
+[2024-04-25T17:39:02Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 138975 }, mem_before_len: 138263, mem_after_len: 138263
+[2024-04-25T17:39:05Z INFO  add11_yml] done with transaction 2
+[2024-04-25T17:39:06Z INFO  evm_arithmetization::generation::state] CPU halted after 469027 cycles
+[2024-04-25T17:39:06Z INFO  evm_arithmetization::generation] CPU trace padded to 524288 cycles
+[2024-04-25T17:39:44Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 4628, full rlp seg 73926, full kernel segment 18788
+[2024-04-25T17:39:48Z INFO  evm_arithmetization::memory::memory_stark] all counts [40771, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 107, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 40878
+[2024-04-25T17:39:48Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 78020, byte_packing_len: 130836, cpu_len: 524288, keccak_len: 39816, keccak_sponge_len: 1659, logic_len: 16425, memory_len: 1948696 }, mem_before_len: 59815, mem_after_len: 140315
+[2024-04-25T17:40:13Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:40:13Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:40:13Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:40:13Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 32, 22, 1, 64, 0, 0, 16, 196, 73926, 4628, 253, 0, 32, 0, 0, 0, 0, 36, 63, 0, 256, 0, 7, 522, 65, 177, 27, 8, 0, 0, 0], total nb of eliminated addresses 139772
+[2024-04-25T17:40:13Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 141027 }, mem_before_len: 140315, mem_after_len: 140315
+[2024-04-25T17:40:15Z INFO  add11_yml] done with transaction 3
+[2024-04-25T17:40:16Z INFO  evm_arithmetization::generation::state] CPU halted after 531451 cycles
+[2024-04-25T17:40:16Z INFO  evm_arithmetization::generation] CPU trace padded to 1048576 cycles
+[2024-04-25T17:40:56Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 5741, full rlp seg 84076, full kernel segment 19692
+[2024-04-25T17:41:00Z INFO  evm_arithmetization::memory::memory_stark] all counts [39867, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 109, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 39976
+[2024-04-25T17:41:01Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 88052, byte_packing_len: 147902, cpu_len: 1048576, keccak_len: 39048, keccak_sponge_len: 1627, logic_len: 16727, memory_len: 2137091 }, mem_before_len: 59815, mem_after_len: 151512
+[2024-04-25T17:41:54Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:41:54Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:41:54Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:41:54Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 0, 22, 1, 64, 0, 0, 16, 58, 84076, 5741, 253, 0, 32, 0, 0, 0, 0, 36, 83, 0, 256, 0, 8, 564, 76, 213, 21, 8, 0, 0, 0], total nb of eliminated addresses 150969
+[2024-04-25T17:41:55Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 152224 }, mem_before_len: 151512, mem_after_len: 151512
+[2024-04-25T17:41:58Z INFO  add11_yml] done with transaction 4
+[2024-04-25T17:41:58Z INFO  evm_arithmetization::generation::state] CPU halted after 404562 cycles
+[2024-04-25T17:41:58Z INFO  evm_arithmetization::generation] CPU trace padded to 524288 cycles
+[2024-04-25T17:42:27Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 4158, full rlp seg 60084, full kernel segment 18782
+[2024-04-25T17:42:30Z INFO  evm_arithmetization::memory::memory_stark] all counts [40777, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 40888
+[2024-04-25T17:42:31Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 68375, byte_packing_len: 112351, cpu_len: 524288, keccak_len: 31992, keccak_sponge_len: 1333, logic_len: 15022, memory_len: 1707059 }, mem_before_len: 59815, mem_after_len: 126138
+[2024-04-25T17:42:52Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:42:52Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:42:52Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:42:52Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 0, 22, 1, 64, 0, 0, 16, 644, 60084, 4158, 253, 0, 32, 0, 0, 0, 0, 32, 43, 0, 256, 0, 5, 320, 53, 144, 21, 6, 0, 0, 0], total nb of eliminated addresses 125595
+[2024-04-25T17:42:52Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 126850 }, mem_before_len: 126138, mem_after_len: 126138
+[2024-04-25T17:42:53Z INFO  add11_yml] done with transaction 5
+[2024-04-25T17:42:54Z INFO  evm_arithmetization::generation::state] CPU halted after 403789 cycles
+[2024-04-25T17:42:54Z INFO  evm_arithmetization::generation] CPU trace padded to 524288 cycles
+[2024-04-25T17:43:22Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 4163, full rlp seg 60198, full kernel segment 18775
+[2024-04-25T17:43:26Z INFO  evm_arithmetization::memory::memory_stark] all counts [40784, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], total nb of eliminated addresses 40895
+[2024-04-25T17:43:27Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 68202, byte_packing_len: 112142, cpu_len: 524288, keccak_len: 31968, keccak_sponge_len: 1332, logic_len: 15008, memory_len: 1703365 }, mem_before_len: 59815, mem_after_len: 126257
+[2024-04-25T17:43:47Z INFO  evm_arithmetization::generation::state] CPU halted after 144 cycles
+[2024-04-25T17:43:47Z INFO  evm_arithmetization::generation] CPU trace padded to 256 cycles
+[2024-04-25T17:43:47Z INFO  evm_arithmetization::memory::memory_stark] Before mem_before: full trie data segment 0, full rlp seg 0, full kernel segment 236
+[2024-04-25T17:43:47Z INFO  evm_arithmetization::memory::memory_stark] all counts [59323, 118, 0, 0, 0, 22, 1, 64, 0, 0, 16, 644, 60198, 4163, 253, 0, 32, 0, 0, 0, 0, 32, 43, 0, 256, 0, 5, 320, 53, 144, 21, 6, 0, 0, 0], total nb of eliminated addresses 125714
+[2024-04-25T17:43:47Z INFO  evm_arithmetization::witness::traces] Trace lengths (before padding): TraceCheckpoint { arithmetic_len: 46, byte_packing_len: 39, cpu_len: 256, keccak_len: 0, keccak_sponge_len: 0, logic_len: 3, memory_len: 126969 }, mem_before_len: 126257, mem_after_len: 126257
+[2024-04-25T17:43:49Z INFO  add11_yml] done with transaction 6
+[2024-04-25T17:43:51Z INFO  evm_arithmetization::generation::state] CPU halted after 802967 cycles
+[2024-04-25T17:43:51Z INFO  evm_arithmetization::generation] CPU trace padded to 1048576 cycles
