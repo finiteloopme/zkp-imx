@@ -217,6 +217,7 @@ pub mod util;
 use jemallocator::Jemalloc;
 use mpt_trie::partial_trie::HashedPartialTrie;
 
+#[cfg(jemalloc_enable)]
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
