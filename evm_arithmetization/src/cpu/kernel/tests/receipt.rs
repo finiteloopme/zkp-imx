@@ -129,7 +129,9 @@ fn test_receipt_encoding() -> Result<()> {
     // Get the expected RLP encoding.
     let expected_rlp = rlp::encode(&rlp::encode(&receipt_1));
 
-    let initial_stack: Vec<U256> = vec![retdest, 0.into(), 0.into(), 0.into()];
+    // Address at which the encoding is written.
+    let rlp_addr = U256::from(Segment::RlpRaw as usize);
+    let initial_stack: Vec<U256> = vec![retdest, 0.into(), 0.into(), rlp_addr];
     let mut interpreter: Interpreter<F> = Interpreter::new(encode_receipt, initial_stack);
 
     // Write data to memory.
@@ -198,9 +200,9 @@ fn test_receipt_encoding() -> Result<()> {
     interpreter.run()?;
     let rlp_pos = interpreter.pop().expect("The stack should not be empty");
 
-    let rlp_read: &[u8] = &interpreter.get_rlp_memory()[1..]; // skip empty_node
+    let rlp_read: &[u8] = &interpreter.get_rlp_memory();
 
-    assert_eq!(rlp_pos.as_usize(), expected_rlp.len());
+    assert_eq!((rlp_pos - rlp_addr).as_usize(), expected_rlp.len());
     for i in 0..rlp_read.len() {
         assert_eq!(rlp_read[i], expected_rlp[i]);
     }
