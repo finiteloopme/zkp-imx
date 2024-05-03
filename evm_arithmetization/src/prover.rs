@@ -40,6 +40,7 @@ where
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
     let (traces, public_values) = timed!(
         timing,
+        log::Level::Info,
         "generate all traces",
         generate_traces(all_stark, inputs, config, timing)?
     );
@@ -76,6 +77,7 @@ where
     // interpolating its trace.
     let trace_commitments = timed!(
         timing,
+        log::Level::Info,
         "compute all trace commitments",
         trace_poly_values
             .iter()
@@ -83,6 +85,7 @@ where
             .map(|(trace, table)| {
                 timed!(
                     timing,
+                    log::Level::Info,
                     &format!("compute trace commitment for {:?}", table),
                     PolynomialBatch::<F, C, D>::from_values(
                         trace.clone(),
@@ -126,6 +129,7 @@ where
 
     let stark_proofs = timed!(
         timing,
+        log::Level::Info,
         "compute all proofs given commitments",
         prove_with_commitments(
             all_stark,
@@ -195,6 +199,7 @@ where
 {
     let arithmetic_proof = timed!(
         timing,
+        log::Level::Info,
         "prove Arithmetic STARK",
         prove_single_table(
             &all_stark.arithmetic_stark,
@@ -210,7 +215,8 @@ where
     );
     let byte_packing_proof = timed!(
         timing,
-        "prove byte packing STARK",
+        log::Level::Info,
+        "prove BytePacking STARK",
         prove_single_table(
             &all_stark.byte_packing_stark,
             config,
@@ -225,6 +231,7 @@ where
     );
     let cpu_proof = timed!(
         timing,
+        log::Level::Info,
         "prove CPU STARK",
         prove_single_table(
             &all_stark.cpu_stark,
@@ -240,6 +247,7 @@ where
     );
     let keccak_proof = timed!(
         timing,
+        log::Level::Info,
         "prove Keccak STARK",
         prove_single_table(
             &all_stark.keccak_stark,
@@ -255,7 +263,8 @@ where
     );
     let keccak_sponge_proof = timed!(
         timing,
-        "prove Keccak sponge STARK",
+        log::Level::Info,
+        "prove KeccakSponge STARK",
         prove_single_table(
             &all_stark.keccak_sponge_stark,
             config,
@@ -270,7 +279,8 @@ where
     );
     let logic_proof = timed!(
         timing,
-        "prove logic STARK",
+        log::Level::Info,
+        "prove Logic STARK",
         prove_single_table(
             &all_stark.logic_stark,
             config,
@@ -285,7 +295,8 @@ where
     );
     let memory_proof = timed!(
         timing,
-        "prove memory STARK",
+        log::Level::Info,
+        "prove Memory STARK",
         prove_single_table(
             &all_stark.memory_stark,
             config,

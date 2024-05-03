@@ -228,7 +228,13 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     apply_metadata_and_tries_memops(&mut state, &inputs);
 
-    let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
+    let cpu_res = timed!(
+        timing,
+        log::Level::Info,
+        "simulate CPU",
+        simulate_cpu(&mut state)
+    );
+
     if cpu_res.is_err() {
         let _ = output_debug_tries(&state);
 

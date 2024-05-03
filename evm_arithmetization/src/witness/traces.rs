@@ -138,12 +138,14 @@ impl<T: Copy> Traces<T> {
 
         let arithmetic_trace = timed!(
             timing,
-            "generate arithmetic trace",
+            log::Level::Info,
+            "generate Arithmetic trace",
             all_stark.arithmetic_stark.generate_trace(arithmetic_ops)
         );
         let byte_packing_trace = timed!(
             timing,
-            "generate byte packing trace",
+            log::Level::Info,
+            "generate BytePacking trace",
             all_stark
                 .byte_packing_stark
                 .generate_trace(byte_packing_ops, cap_elements, timing)
@@ -152,6 +154,7 @@ impl<T: Copy> Traces<T> {
         let cpu_trace = trace_rows_to_poly_values(cpu_rows);
         let keccak_trace = timed!(
             timing,
+            log::Level::Info,
             "generate Keccak trace",
             all_stark
                 .keccak_stark
@@ -159,6 +162,7 @@ impl<T: Copy> Traces<T> {
         );
         let keccak_sponge_trace = timed!(
             timing,
+            log::Level::Info,
             "generate Keccak sponge trace",
             all_stark
                 .keccak_sponge_stark
@@ -166,14 +170,16 @@ impl<T: Copy> Traces<T> {
         );
         let logic_trace = timed!(
             timing,
-            "generate logic trace",
+            log::Level::Info,
+            "generate Logic trace",
             all_stark
                 .logic_stark
                 .generate_trace(logic_ops, cap_elements, timing)
         );
         let memory_trace = timed!(
             timing,
-            "generate memory trace",
+            log::Level::Info,
+            "generate Memory trace",
             all_stark.memory_stark.generate_trace(memory_ops, timing)
         );
 
