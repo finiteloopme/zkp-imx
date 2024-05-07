@@ -188,7 +188,7 @@ fn test_two_to_one_aggregation() -> anyhow::Result<()> {
     // Preprocess all circuits.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[8..17, 8..15, 8..18, 8..15, 8..10, 8..13, 8..20],
+        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
         &config,
     );
 
