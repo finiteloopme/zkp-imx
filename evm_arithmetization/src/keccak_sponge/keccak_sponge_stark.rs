@@ -2,6 +2,7 @@ use core::borrow::Borrow;
 use core::iter::{self, repeat};
 use core::marker::PhantomData;
 use core::mem::size_of;
+use std::cmp::max;
 
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -279,6 +280,7 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
         operations: Vec<KeccakSpongeOp>,
         min_rows: usize,
     ) -> Vec<[F; NUM_KECCAK_SPONGE_COLUMNS]> {
+        let min_rows = max(min_rows, BYTE_RANGE_MAX);
         let base_len: usize = operations
             .iter()
             .map(|op| op.input.len() / KECCAK_RATE_BYTES + 1)
