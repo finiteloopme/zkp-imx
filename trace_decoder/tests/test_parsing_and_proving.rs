@@ -11,6 +11,7 @@ use std::time::Duration;
 use evm_arithmetization::prover::testing::simulate_execution;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::util::timing::TimingTree;
+use plonky2_maybe_rayon::{MaybeIntoParIter, ParallelIterator};
 use pretty_env_logger::env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use serde::{Deserialize, Serialize};
 use trace_decoder::{
@@ -45,17 +46,20 @@ fn test_block(path: &str) {
         )
         .unwrap();
 
-    for tx_input in tx_inputs {
-        let timing = TimingTree::new(
-            &format!(
-                "Simulating zkEVM CPU for txn {:?}",
-                tx_input.txn_number_before
-            ),
-            log::Level::Info,
-        );
-        simulate_execution::<F>(tx_input).unwrap();
-        timing.filter(Duration::from_millis(100)).print();
-    }
+    let _ = tx_inputs
+        .into_par_iter()
+        .map(|tx_input| {
+            let timing = TimingTree::new(
+                &format!(
+                    "Simulating zkEVM CPU for txn {:?}",
+                    tx_input.txn_number_before
+                ),
+                log::Level::Info,
+            );
+            simulate_execution::<F>(tx_input).unwrap();
+            timing.filter(Duration::from_millis(100)).print();
+        })
+        .collect::<Vec<_>>();
 }
 
 /// Tests a small block with withdrawals: <https://etherscan.io/block/19807080>.
