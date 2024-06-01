@@ -435,6 +435,19 @@ impl PublicValuesTarget {
         }
     }
 
+    // Todo
+    // maybe should be `impl Into<vec> for PublicValuesTarget`.
+    pub(crate) fn to_public_inputs(&self) -> Vec<Target> {
+        let mut res = vec!();
+        res.extend(self.block_hashes.to_public_inputs());
+        //self.trie_roots_before;
+        //self.trie_roots_after;
+        //self.block_metadata;
+        //self.block_hashes;
+        //self.extra_block_data;
+        res
+    }
+
     /// Returns the public values in `pv0` or `pv1` depening on `condition`.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
@@ -699,6 +712,13 @@ impl BlockHashesTarget {
             prev_hashes: pis[0..2048].try_into().unwrap(),
             cur_hash: pis[2048..2056].try_into().unwrap(),
         }
+    }
+
+    pub(crate) fn to_public_inputs(&self) -> Vec<Target> {
+        let mut res = vec!();
+        res.extend(&self.prev_hashes);
+        res.extend(&self.cur_hash);
+        res
     }
 
     /// If `condition`, returns the block hashes in `bm0`,

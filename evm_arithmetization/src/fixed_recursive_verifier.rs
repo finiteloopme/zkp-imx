@@ -12,7 +12,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOut, RichField};
+use plonky2::hash::hash_types::{HashOut, HashOutTarget, RichField};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -374,8 +374,8 @@ where
     proof1: ProofWithPublicInputsTarget<D>,
     pv0: PublicValuesTarget,
     pv1: PublicValuesTarget,
-    pv0_hash: PublicValuesTarget,
-    pv1_hash: PublicValuesTarget,
+    pv0_hash: HashOutTarget,
+    pv1_hash: HashOutTarget,
 }
 
 impl<F, C, const D: usize> TwoToOneBlockAggCircuitData<F, C, D>
@@ -1723,69 +1723,59 @@ where
     }
 
     /// This could follow a structure similar to [`connect_block_proof`]
-    /// PublicInput: hash(pv0), hash(pv1)
-    /// PrivateInput: p0, pv0, p1, pv1
-    /// 1. agg_proof <- prove(verify(p0, pv0) && verify(p1, pv1))
-    /// 2. let agg_hash = hash(hash(pv0) ++ hash(pv1))
-    /// 3. agg_hash_proof <- prove(hash(hash(pv0) ++ hash(pv1)) == agg_hash)
-    /// 4. agg_block_proof <- prove(verify(agg_proof, p0, pv0, p1, pv1) && verify(agg_hash_proof, pv0, pv1, agg_hash))
-    /// Output: agg_block_proof, agg_hash
     fn create_two_to_one_block_circuit_einar(
         block: &BlockCircuitData<F, C, D>,
-    ) -> TwoToOneBlockAggCircuitData<F, C, D> {
+    ) -> TwoToOneBlockAggCircuitData<F, C, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    C::Hasher: AlgebraicHasher<F>
+    {
+
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         /// PublicInput: hash(pv0), hash(pv1)
         let pv0_hash = builder.add_virtual_hash_public_input();
-        builder.register_public_inputs(&pv0_hash.elements);
         let pv1_hash = builder.add_virtual_hash_public_input();
-        builder.register_public_inputs(&pv1_hash.elements);
 
         /// Output: agg_block_proof, agg_hash
         let agg_hash_witness = builder.add_virtual_hash_public_input();
-        builder.register_public_inputs(&agg_hash_witness.elements);
 
         /// PrivateInput: p0, pv0, p1, pv1
-        let block_proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
-        let pv0: PublicValuesTarget = add_virtual_public_values(&mut builder);
-        let block_proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
+        let proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
+        let pv0 = add_virtual_public_values(&mut builder);
+        let proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
         let pv1 = add_virtual_public_values(&mut builder);
 
+        let pv0_vec = pv0.to_public_inputs();
+        let pv1_vec = pv1.to_public_inputs();
         // check each of the supplied hashes correspond to what we can compute directly from the witnesses (pv0,pv1)
-        let pv0_hash_computed = hash_public_values_target::<F,C,D>(&pv0);
-        let pv1_hash_computed = hash_public_values_target::<F,C,D>(&pv1);
+        let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_vec);
+        let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_vec);
 
-        let pv0_target = builder.constant_hash(pv0_hash_computed);
-        let pv1_target = builder.constant_hash(pv1_hash_computed);
+        let mut agg_vec = vec!();
+        agg_vec.extend(&pv0_hash_computed.elements);
+        agg_vec.extend(&pv1_hash_computed.elements);
+        let agg_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(agg_vec);
 
-        // 3. agg_hash_proof <- prove(hash(hash(pv0) ++ hash(pv1)) == agg_hash)
-        let agg_hash = C::Hasher::two_to_one(pv0_hash_computed, pv1_hash_computed);
-        let agg_hash_target = builder.constant_hash(agg_hash);
-        //builder.register_public_input(agg_hash);
-
-        for i in 0..plonky2::hash::hash_types::NUM_HASH_OUT_ELTS {
-            builder.connect(pv0_target.elements[i],pv0_hash.elements[i]);
-            builder.connect(pv1_target.elements[i],pv1_hash.elements[i]);
-            builder.connect(agg_hash_witness.elements[i],agg_hash_target.elements[i]);
-        }
-
-        todo!("Continue from here .. ");
-
+        builder.connect_hashes(pv0_hash, pv0_hash_computed);
+        builder.connect_hashes(pv1_hash, pv1_hash_computed);
+        builder.connect_hashes(agg_hash_witness, agg_hash_computed);
 
         let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
 
-        builder.verify_proof::<C>(&block_proof0, &block_verifier_data, &block.circuit.common);
-        builder.verify_proof::<C>(&block_proof1, &block_verifier_data, &block.circuit.common);
+        builder.verify_proof::<C>(&proof0, &block_verifier_data, &block.circuit.common);
+        builder.verify_proof::<C>(&proof1, &block_verifier_data, &block.circuit.common);
 
         let circuit = builder.build::<C>();
 
         TwoToOneBlockAggCircuitData {
             circuit,
-            proof0: block_proof0,
-            proof1: block_proof1,
+            proof0,
+            proof1,
             pv0,
             pv1,
-            pv0_hash: todo!(),
-            pv1_hash: todo!(),
+            pv0_hash: pv0_hash_computed,
+            pv1_hash: pv1_hash_computed,
         }
     }
 
@@ -2098,30 +2088,4 @@ fn shrinking_config() -> CircuitConfig {
         num_routed_wires: 40,
         ..CircuitConfig::standard_recursion_config()
     }
-}
-
-
-
-fn hash_public_values_target<F,C,const D: usize>(pv: &PublicValuesTarget) -> HashOut<F>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    C::Hasher: AlgebraicHasher<F>
-    {
-// pub struct PublicValuesTarget {
-//     /// Trie hashes before the execution of the local state transition.
-//     pub trie_roots_before: TrieRootsTarget,
-//     /// Trie hashes after the execution of the local state transition.
-//     pub trie_roots_after: TrieRootsTarget,
-//     /// Block metadata: it remains unchanged within a block.
-//     pub block_metadata: BlockMetadataTarget,
-//     /// 256 previous block hashes and current block's hash.
-//     pub block_hashes: BlockHashesTarget,
-//     /// Extra block data that is specific to the current proof.
-//     pub extra_block_data: ExtraBlockDataTarget,
-// }
-
-//pvt.trie_roots_before.
-
-    todo!()
 }
