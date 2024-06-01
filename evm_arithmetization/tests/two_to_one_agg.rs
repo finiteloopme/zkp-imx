@@ -5,7 +5,7 @@ use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -225,6 +225,122 @@ fn test_two_to_one_aggregation() -> anyhow::Result<()> {
 
     let proof = all_circuits.prove_two_to_one_aggregation(&agg_proof0, &agg_proof1, pv0, pv1)?;
     all_circuits.verify_two_to_one_aggregation(&proof)
+}
+
+#[test]
+/// Run: RUSTFLAGS=-Ctarget-cpu=native cargo test --release -- three_to_one
+/// Aggregate a sequential proof containing three proofs with the structure `((A,B),C)`.
+/// We take the previous example and extend it.
+///
+///
+///  A    B   C
+///   \  /   /
+///   (A,B) /
+///     \  /
+///   ((A,B),C)
+///
+fn test_three_to_one_block_aggregation_seq() -> anyhow::Result<()> {
+    let all_stark = AllStark::<F, D>::default();
+    let config = StarkConfig::standard_fast_config();
+
+    let inputs0 = simple_transfer(4)?;
+    let dummy0 = dummy_inputs(&inputs0);
+    let inputs1 = simple_transfer(1)?;
+    let dummy1 = dummy_inputs(&inputs1);
+    let inputs2 = simple_transfer(3)?;
+    let dummy2 = dummy_inputs(&inputs2);
+
+    // Preprocess all circuits.
+    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+        &all_stark,
+        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
+        &config,
+    );
+
+    let mut timing = TimingTree::new("prove root first", log::Level::Info);
+    let (root_proof0, pv0) =
+        all_circuits.prove_root(&all_stark, &config, inputs0, &mut timing, None)?;
+    all_circuits.verify_root(root_proof0.clone())?;
+    let (dummy_proof0, dummy_pv0) =
+        all_circuits.prove_root(&all_stark, &config, dummy0, &mut timing, None)?;
+    all_circuits.verify_root(dummy_proof0.clone())?;
+    let (root_proof1, pv1) =
+        all_circuits.prove_root(&all_stark, &config, inputs1, &mut timing, None)?;
+    all_circuits.verify_root(root_proof1.clone())?;
+    let (dummy_proof1, dummy_pv1) =
+        all_circuits.prove_root(&all_stark, &config, dummy1, &mut timing, None)?;
+    all_circuits.verify_root(dummy_proof1.clone())?;
+    let (root_proof2, pv2) =
+        all_circuits.prove_root(&all_stark, &config, inputs2, &mut timing, None)?;
+    all_circuits.verify_root(root_proof2.clone())?;
+    let (dummy_proof2, dummy_pv2) =
+        all_circuits.prove_root(&all_stark, &config, dummy2, &mut timing, None)?;
+    all_circuits.verify_root(dummy_proof2.clone())?;
+
+    let (agg_proof0, pv0) = all_circuits.prove_aggregation(
+        false,
+        &root_proof0,
+        pv0,
+        false,
+        &dummy_proof0,
+        dummy_pv0,
+    )?;
+    let (agg_proof1, pv1) = all_circuits.prove_aggregation(
+        false,
+        &root_proof1,
+        pv1,
+        false,
+        &dummy_proof1,
+        dummy_pv1,
+    )?;
+    let (agg_proof2, pv2) = all_circuits.prove_aggregation(
+        false,
+        &root_proof2,
+        pv2,
+        false,
+        &dummy_proof2,
+        dummy_pv2,
+    )?;
+
+    all_circuits.verify_aggregation(&agg_proof0)?;
+    all_circuits.verify_aggregation(&agg_proof1)?;
+    all_circuits.verify_aggregation(&agg_proof2)?;
+
+    // Test retrieved public values from the proof public inputs.
+    let retrieved_public_values0 = PublicValues::from_public_inputs(&agg_proof0.public_inputs);
+    assert_eq!(retrieved_public_values0,pv0);
+    let retrieved_public_values1 = PublicValues::from_public_inputs(&agg_proof1.public_inputs);
+    assert_eq!(retrieved_public_values1,pv1);
+    let retrieved_public_values2 = PublicValues::from_public_inputs(&agg_proof2.public_inputs);
+    assert_eq!(retrieved_public_values2,pv2);
+
+    let (block_proof0, _block_public_values) = all_circuits.prove_block(
+        None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
+        &agg_proof0,
+        pv0.clone(),
+    )?;
+    let (block_proof1, _block_public_values) = all_circuits.prove_block(
+        None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
+        &agg_proof0,
+        pv1.clone(),
+    )?;
+    let (block_proof2, _block_public_values) = all_circuits.prove_block(
+        None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
+        &agg_proof0,
+        pv2.clone(),
+    )?;
+    all_circuits.verify_block(&block_proof0)?;
+    all_circuits.verify_block(&block_proof1)?;
+    all_circuits.verify_block(&block_proof2)?;
+
+    // Everything above this point should be refactored to a function.
+
+    let proof01 = all_circuits.prove_two_to_one_block_einar(&block_proof0, &block_proof1, pv0.clone(), pv1)?;
+    all_circuits.verify_two_to_one_block_einar(&proof01)?;
+
+    let pv01 = pv0; // + pv1;
+    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &agg_proof2, pv01, pv2)?;
+    all_circuits.verify_two_to_one_block_einar(&proof012)
 }
 
 fn eth_to_wei(eth: U256) -> U256 {
