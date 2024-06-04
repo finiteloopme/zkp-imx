@@ -6,7 +6,8 @@ global mpt_read_state_trie_test:
     //TEST linked list
     DUP1
     %read_accounts_linked_list
-    // stack: ll_addr, address, retdest
+    // stack: addr_found, ll_addr, address, retdest
+    POP
     %add_const(3)
     %mload_trie_data
     // stack: ll_code_hash, address, retdest
