@@ -475,17 +475,18 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
 
     log::info!("Stage 1:  Compute block proofs");
-    let unrelated_block_proofs: Vec<_> = [127, 42, 65]
+    let some_timestamps = [127, 42, 65];
+    let unrelated_block_proofs: Vec<_> = some_timestamps
         .iter()
         .map(|&ts| {
-            generate_test_block_proof(ts, &mut timing, &all_circuits, &all_stark, &config).unwrap()
+            generate_test_block_proof(ts, &mut timing, &all_circuits, &all_stark, &config)
         })
-        .collect();
+        .collect()?;
 
     log::info!("Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .for_each(|bp| all_circuits.verify_block(bp).unwrap());
+        .map(|bp| all_circuits.verify_block(bp)).collect()?;
 
     log::info!("Stage 3: Aggregate block proofs");
     //let proof01 = all_circuits.prove_two_to_one_block_einar(&block_proof0,
