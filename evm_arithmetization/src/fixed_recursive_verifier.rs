@@ -1801,18 +1801,35 @@ where
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut inputs = PartialWitness::new();
 
-        let pv0_hash = todo!();
-        let pv1_hash = todo!();
+        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
+        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
+        debug_assert_eq!(pv0, ppp0);
+        debug_assert_eq!(pv1, ppp1);
+
+        let pv0_hash = proof0.get_public_inputs_hash();
+        let pv1_hash = proof1.get_public_inputs_hash();
+        let pp0 = C::InnerHasher::hash_no_pad(&proof0.public_inputs);
+        let pp1 = C::InnerHasher::hash_no_pad(&proof1.public_inputs);
+
+        debug_assert_eq!(pv0_hash, pp0);
+        debug_assert_eq!(pv1_hash, pp1);
+
+        //assert!(false, "HUURRRAYY!");
 
         inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
         inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
 
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
+        // set hashes
+        inputs.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
+        inputs.set_hash_target(self.two_to_one_block.pv0_hash,pv1_hash);
+        //inputs.set_target_arr(targets, &pv0_hash.to_vec());
+        //inputs.set_target_arr(targets, &pv1_hash.to_vec());
+        // set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0_hash, &pv0).map_err(|_| {
+        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        // })?;
+        // set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1_hash, &pv1).map_err(|_| {
+        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        // })?;
 
         let proof = self.two_to_one_block.circuit.prove(inputs)?;
         Ok(proof)

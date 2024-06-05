@@ -434,14 +434,13 @@ fn generate_test_block_proof(
         pv0.extra_block_data.checkpoint_state_trie_root
     );
 
-    log::info!("Stage 5: Prove Block");
+    log::info!("Stage 5:  Prove Block");
     let (block_proof0, block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
         &agg_proof0,
         pv0.clone(),
     )?;
 
-    // what can we assert on this?
     let pv_block = PublicValues::from_public_inputs(&block_proof0.public_inputs);
     assert_eq!(block_public_values, pv_block);
 
@@ -495,15 +494,14 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     let pi0 = PublicValues::from_public_inputs(&bp[0].public_inputs);
     let pi1 = PublicValues::from_public_inputs(&bp[1].public_inputs);
 
-    let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0],
-    &bp[1], pi0, pi1)?;
+    let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0], &bp[1], pi0, pi1)?;
     all_circuits.verify_two_to_one_block_einar(&proof01)?;
 
     let pi01 = PublicValues::from_public_inputs(&proof01.public_inputs);
     let pi2 = PublicValues::from_public_inputs(&bp[2].public_inputs);
 
-    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &bp[2], pi01, pi2 )?;
-    all_circuits.verify_two_to_one_block_einar(& proof012);
+    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &bp[2], pi01, pi2)?;
+    all_circuits.verify_two_to_one_block_einar(&proof012)?;
     Ok(())
 }
 
