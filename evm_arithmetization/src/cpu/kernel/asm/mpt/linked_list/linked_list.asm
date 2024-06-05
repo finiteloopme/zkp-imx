@@ -623,7 +623,7 @@ global remove_slot:
     // stack: address, slot
     %addr_to_state_key
     SWAP1 %slot_to_storage_key
-    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0 %%after)
+    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
     %jump(search_slot)
 %%after:
     // stack: storage_found, cold_access, value_ptr, slot_ptr
