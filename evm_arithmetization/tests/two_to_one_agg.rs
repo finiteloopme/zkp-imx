@@ -18,6 +18,8 @@ use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
 use starky::stark::Stark;
 
+// use std::error::Error;
+
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
@@ -370,7 +372,8 @@ fn test_two_to_one_aggregation() -> anyhow::Result<()> {
 }
 
 
-fn generate_test_block_proof(timestamp: u64, timing: &mut TimingTree, all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>, all_stark: &AllStark<GoldilocksField, 2>, config: StarkConfig) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
+fn generate_test_block_proof(timestamp: u64, timing: &mut TimingTree, all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>, all_stark: &AllStark<GoldilocksField, 2>, config: &StarkConfig) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
+    log::info!("Stage 0");
     let inputs0 = empty_transfer(timestamp)?;
     let inputs = inputs0.clone();
     let dummy0 =
@@ -396,6 +399,7 @@ fn generate_test_block_proof(timestamp: u64, timing: &mut TimingTree, all_circui
         block_metadata: inputs.block_metadata.clone(),
         block_hashes: inputs.block_hashes.clone(),
     };
+    log::info!("Stage 1");
 
 
     let (root_proof0, pv0) =
@@ -405,6 +409,7 @@ fn generate_test_block_proof(timestamp: u64, timing: &mut TimingTree, all_circui
         all_circuits.prove_root(&all_stark, &config, dummy0, timing, None)?;
     all_circuits.verify_root(dummy_proof0.clone())?;
 
+    log::info!("Stage 3");
     let (agg_proof0, pv0) = all_circuits.prove_aggregation(
         false,
         &root_proof0,
@@ -414,25 +419,32 @@ fn generate_test_block_proof(timestamp: u64, timing: &mut TimingTree, all_circui
         dummy_pv0,
     )?;
 
+    log::info!("Stage 4:  Verify aggregation");
     all_circuits.verify_aggregation(&agg_proof0)?;
 
+    log::info!("Stage 4:  Check public values");
+    // Test retrieved public values from the proof public inputs.
     let retrieved_public_values0 = PublicValues::from_public_inputs(&agg_proof0.public_inputs);
     assert_eq!(retrieved_public_values0,pv0);
+    assert_eq!(pv0.trie_roots_before.state_root,pv0.extra_block_data.checkpoint_state_trie_root);
 
-    let (block_proof0, _block_public_values) = all_circuits.prove_block(
+    log::info!("Stage 7: Prove Block");
+    let (block_proof0, block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
         &agg_proof0,
         pv0.clone(),
     )?;
 
-    PublicValues::from_public_inputs(&block_proof0.public_inputs);
+    // what can we assert on this?
+    let pv_block = PublicValues::from_public_inputs(&block_proof0.public_inputs);
+    assert_eq!(block_public_values, pv_block);
 
     Ok(block_proof0)
 }
 
 
 #[test]
-/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g"  cargo test --release -- --nocapture three_to_one
+/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"  cargo test --release -- --nocapture three_to_one
 /// Aggregate a sequential proof containing three proofs with the structure `((A,B),C)`.
 /// We take the previous example and extend it.
 ///
@@ -444,41 +456,42 @@ fn generate_test_block_proof(timestamp: u64, timing: &mut TimingTree, all_circui
 ///
 fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     init_logger();
+    log::info!("Stage 0:  Setup");
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    let inputs0 = empty_transfer(4)?;
-    let inputs = inputs0.clone();
-    let dummy0 =
-    GenerationInputs {
-        txn_number_before: inputs.txn_number_before ,
-        gas_used_before: inputs.gas_used_after,
-        gas_used_after: inputs.gas_used_after,
-        signed_txn: None,
-        withdrawals: vec![],
-        tries: TrieInputs {
-            state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),
-            transactions_trie: HashedPartialTrie::from(Node::Hash(
-                inputs.trie_roots_after.transactions_root,
-            )),
-            receipts_trie: HashedPartialTrie::from(Node::Hash(
-                inputs.trie_roots_after.receipts_root,
-            )),
-            storage_tries: vec![],
-        },
-        trie_roots_after: inputs.trie_roots_after,
-        checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
-        contract_code: Default::default(),
-        block_metadata: inputs.block_metadata.clone(),
-        block_hashes: inputs.block_hashes.clone(),
-    };
+    // let inputs0 = empty_transfer(4)?;
+    // let inputs = inputs0.clone();
+    // let dummy0 =
+    // GenerationInputs {
+    //     txn_number_before: inputs.txn_number_before ,
+    //     gas_used_before: inputs.gas_used_after,
+    //     gas_used_after: inputs.gas_used_after,
+    //     signed_txn: None,
+    //     withdrawals: vec![],
+    //     tries: TrieInputs {
+    //         state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),
+    //         transactions_trie: HashedPartialTrie::from(Node::Hash(
+    //             inputs.trie_roots_after.transactions_root,
+    //         )),
+    //         receipts_trie: HashedPartialTrie::from(Node::Hash(
+    //             inputs.trie_roots_after.receipts_root,
+    //         )),
+    //         storage_tries: vec![],
+    //     },
+    //     trie_roots_after: inputs.trie_roots_after,
+    //     checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
+    //     contract_code: Default::default(),
+    //     block_metadata: inputs.block_metadata.clone(),
+    //     block_hashes: inputs.block_hashes.clone(),
+    // };
 
     // let inputs1 = simple_transfer(1)?;
     // let dummy1 = dummy_inputs(&inputs1);
     // let inputs2 = simple_transfer(3)?;
     // let dummy2 = dummy_inputs(&inputs2);
 
-    log::info!("Stage 1");
+    // log::info!("Stage 1");
 
     // Preprocess all circuits.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
@@ -486,7 +499,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
         &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
         &config,
     );
-    log::info!("Stage 2");
+    // log::info!("Stage 2");
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
     // let (root_proof0, pv0) =
@@ -508,7 +521,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     //     all_circuits.prove_root(&all_stark, &config, dummy2, &mut timing, None)?;
     // all_circuits.verify_root(dummy_proof2.clone())?;
 
-    log::info!("Stage 3");
+    // log::info!("Stage 3");
 
     // let (agg_proof0, pv0a) = all_circuits.prove_aggregation(
     //     false,
@@ -535,14 +548,14 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     //     dummy_pv2,
     // )?;
 
-    log::info!("Stage 4");
+    // log::info!("Stage 4");
 
     // all_circuits.verify_aggregation(&agg_proof0)?;
     // all_circuits.verify_aggregation(&agg_proof1)?;
-    log::info!("Stage 5");
+    // log::info!("Stage 5");
     // all_circuits.verify_aggregation(&agg_proof2)?;
 
-    log::info!("Stage 6");
+    // log::info!("Stage 6");
 
 
     // Test retrieved public values from the proof public inputs.
@@ -553,7 +566,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     // let retrieved_public_values2 = PublicValues::from_public_inputs(&agg_proof2.public_inputs);
     // assert_eq!(retrieved_public_values2,pv2);
 
-    log::info!("Stage 7a");
+    // log::info!("Stage 7a");
     // assert_eq!(pv0a.trie_roots_before.state_root,pv0a.extra_block_data.checkpoint_state_trie_root);
 
     // let (block_proof0, _block_public_values) = all_circuits.prove_block(
@@ -561,7 +574,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     //     &agg_proof0,
     //     pv0a.clone(),
     // )?;
-    log::info!("Stage 7b");
+    // log::info!("Stage 7b");
     // let (block_proof1, _block_public_values) = all_circuits.prove_block(
     //     None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
     //     &agg_proof1,
@@ -573,13 +586,18 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     //     &agg_proof2,
     //     pv2.clone(),
     // )?;
-    let block_proof4 = generate_test_block_proof(123, &mut timing, &all_circuits, &all_stark, config)?;
-    log::info!("Stage 8");
+    log::info!("Stage 7:  Compute block proofs");
+    let unrelated_block_proofs: Vec<_> = [127,42,65].iter().map(|&ts| generate_test_block_proof(ts, &mut timing, &all_circuits, &all_stark, &config).unwrap() ).collect();
+    //let block_proof4 = generate_test_block_proof(123, &mut timing, &all_circuits, &all_stark, config)?;
+
+
+    log::info!("Stage 8:  Verify block proofs");
     // Everything above this point should be refactored to a function.
     // all_circuits.verify_block(&block_proof0)?;
     // all_circuits.verify_block(&block_proof1)?;
     // all_circuits.verify_block(&block_proof2)?;
-    all_circuits.verify_block(&block_proof4)?;
+    //all_circuits.verify_block(&block_proof4)?;
+    unrelated_block_proofs.iter().for_each(|bp| all_circuits.verify_block(bp).unwrap());
 
     log::info!("Stage 9");
     //let proof01 = all_circuits.prove_two_to_one_block_einar(&block_proof0, &block_proof1, pv0.clone(), pv1)?;
