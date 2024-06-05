@@ -23,6 +23,7 @@ use starky::stark::Stark;
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
+type PISType = ProofWithPublicInputs<F,C,D>;
 
 /// Get `GenerationInputs` for a simple token transfer txn, where the block has
 /// the given timestamp.
@@ -481,22 +482,28 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
         .map(|&ts| {
             generate_test_block_proof(ts, &mut timing, &all_circuits, &all_stark, &config)
         })
-        .collect()?;
+        .collect::<anyhow::Result<Vec<PISType>>>()?;
 
     log::info!("Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp)).collect()?;
+        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
 
     log::info!("Stage 3: Aggregate block proofs");
-    //let proof01 = all_circuits.prove_two_to_one_block_einar(&block_proof0,
-    // &block_proof1, pv0.clone(), pv1)?; all_circuits.
-    // verify_two_to_one_block_einar(&proof01)?;
+    let bp = unrelated_block_proofs;
 
-    // let pv01 = pv0; // + pv1;
-    // let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01,
-    // &agg_proof2, pv01, pv2)?; all_circuits.verify_two_to_one_block_einar(&
-    // proof012)
+    let pi0 = PublicValues::from_public_inputs(&bp[0].public_inputs);
+    let pi1 = PublicValues::from_public_inputs(&bp[1].public_inputs);
+
+    let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0],
+    &bp[1], pi0, pi1)?;
+    all_circuits.verify_two_to_one_block_einar(&proof01)?;
+
+    let pi01 = PublicValues::from_public_inputs(&proof01.public_inputs);
+    let pi2 = PublicValues::from_public_inputs(&bp[2].public_inputs);
+
+    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &bp[2], pi01, pi2 )?;
+    all_circuits.verify_two_to_one_block_einar(& proof012);
     Ok(())
 }
 
