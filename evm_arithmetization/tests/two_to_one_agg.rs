@@ -25,7 +25,9 @@ use starky::stark::Stark;
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
-type PISType = ProofWithPublicInputs<F,C,D>;
+type PwPIS = ProofWithPublicInputs<F,C,D>;
+const CACHE_TEST_BLOCKS: bool = false;
+
 
 /// Get `GenerationInputs` for a simple token transfer txn, where the block has
 /// the given timestamp.
@@ -462,9 +464,10 @@ fn get_test_block_proof_cached(
     let mut path = env::temp_dir();
     path.push("zk_evm_test");
     path.set_file_name(format!("test_block_{timestamp}"));
-    path.set_extension(".blk");
+    path.set_extension("blk");
+    log::info!("{:#?}", path);
 
-    if path.try_exists()? && fs::File::open(path.clone())?.metadata()?.len() > 0 {
+    if CACHE_TEST_BLOCKS && path.try_exists()? && fs::File::open(path.clone())?.metadata()?.len() > 0 {
         let raw_blocks = fs::read(path)?;
         return ProofWithPublicInputs::from_bytes(
             raw_blocks,
@@ -517,7 +520,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
         .map(|&ts| {
             get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
         })
-        .collect::<anyhow::Result<Vec<PISType>>>()?;
+        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
 
     log::info!("Stage 2:  Verify block proofs");
     unrelated_block_proofs

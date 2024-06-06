@@ -372,8 +372,6 @@ where
     pub circuit: CircuitData<F, C, D>,
     proof0: ProofWithPublicInputsTarget<D>,
     proof1: ProofWithPublicInputsTarget<D>,
-    pv0: PublicValuesTarget,
-    pv1: PublicValuesTarget,
     pv0_hash: HashOutTarget,
     pv1_hash: HashOutTarget,
     pv01_hash: HashOutTarget,
@@ -393,8 +391,9 @@ where
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
         buffer.write_target_proof_with_public_inputs(&self.proof0)?;
         buffer.write_target_proof_with_public_inputs(&self.proof1)?;
-        self.pv0.to_buffer(buffer)?;
-        self.pv1.to_buffer(buffer)?;
+        buffer.write_target_hash(&self.pv0_hash)?;
+        buffer.write_target_hash(&self.pv1_hash)?;
+        buffer.write_target_hash(&self.pv01_hash)?;
         Ok(())
     }
 
@@ -404,19 +403,18 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Self> {
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
-        let agg_proof0 = buffer.read_target_proof_with_public_inputs()?;
-        let agg_proof1 = buffer.read_target_proof_with_public_inputs()?;
-        let pv0 = PublicValuesTarget::from_buffer(buffer)?;
-        let pv1 = PublicValuesTarget::from_buffer(buffer)?;
+        let proof0 = buffer.read_target_proof_with_public_inputs()?;
+        let proof1 = buffer.read_target_proof_with_public_inputs()?;
+        let pv0_hash = buffer.read_target_hash()?;
+        let pv1_hash = buffer.read_target_hash()?;
+        let pv01_hash = buffer.read_target_hash()?;
         Ok(Self {
             circuit,
-            proof0: agg_proof0,
-            proof1: agg_proof1,
-            pv0,
-            pv1,
-            pv0_hash: todo!(),
-            pv1_hash: todo!(),
-            pv01_hash: todo!(),
+            proof0,
+            proof1,
+            pv0_hash,
+            pv1_hash,
+            pv01_hash,
         })
     }
 }
@@ -1648,28 +1646,28 @@ where
     /// # Outputs
     ///
     /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
-    pub fn prove_two_to_one_block(
-        &self,
-        proof0: &ProofWithPublicInputs<F, C, D>,
-        proof1: &ProofWithPublicInputs<F, C, D>,
-        pv0: PublicValues,
-        pv1: PublicValues,
-    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let mut inputs = PartialWitness::new();
+    // pub fn prove_two_to_one_block(
+    //     &self,
+    //     proof0: &ProofWithPublicInputs<F, C, D>,
+    //     proof1: &ProofWithPublicInputs<F, C, D>,
+    //     pv0: PublicValues,
+    //     pv1: PublicValues,
+    // ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+    //     let mut inputs = PartialWitness::new();
 
-        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
-        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
+    //     inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
+    //     inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
 
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
+    //     set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(|_| {
+    //         anyhow::Error::msg("Invalid conversion when setting public values targets.")
+    //     })?;
+    //     set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(|_| {
+    //         anyhow::Error::msg("Invalid conversion when setting public values targets.")
+    //     })?;
 
-        let proof = self.two_to_one_block.circuit.prove(inputs)?;
-        Ok(proof)
-    }
+    //     let proof = self.two_to_one_block.circuit.prove(inputs)?;
+    //     Ok(proof)
+    // }
 
     pub fn verify_two_to_one_block(
         &self,
@@ -1728,12 +1726,11 @@ where
     fn create_two_to_one_block_circuit_einar(
         block: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockAggCircuitData<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    C::Hasher: AlgebraicHasher<F>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        C::Hasher: AlgebraicHasher<F>,
     {
-
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         /// PublicInput: hash(pv0), hash(pv1)
         let pv0_hash = builder.add_virtual_hash_public_input();
@@ -1750,11 +1747,12 @@ where
 
         let pv0_vec = pv0.to_public_inputs();
         let pv1_vec = pv1.to_public_inputs();
-        // check each of the supplied hashes correspond to what we can compute directly from the witnesses (pv0,pv1)
+        // check each of the supplied hashes correspond to what we can compute directly
+        // from the witnesses (pv0,pv1)
         let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_vec);
         let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_vec);
 
-        let mut agg_vec = vec!();
+        let mut agg_vec = vec![];
         agg_vec.extend(&pv0_hash_computed.elements);
         agg_vec.extend(&pv1_hash_computed.elements);
         let agg_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(agg_vec);
@@ -1763,7 +1761,8 @@ where
         builder.connect_hashes(pv1_hash, pv1_hash_computed);
         builder.connect_hashes(pv01_hash, agg_hash_computed);
 
-        let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
+        let block_verifier_data =
+            builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
 
         builder.verify_proof::<C>(&proof0, &block_verifier_data, &block.circuit.common);
         builder.verify_proof::<C>(&proof1, &block_verifier_data, &block.circuit.common);
@@ -1774,8 +1773,6 @@ where
             circuit,
             proof0,
             proof1,
-            pv0,
-            pv1,
             pv0_hash,
             pv1_hash,
             pv01_hash,
