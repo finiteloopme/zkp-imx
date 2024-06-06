@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::{env, fs};
 use std::str::FromStr;
 
 use env_logger::fmt::Timestamp;
@@ -16,6 +17,7 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 use starky::stark::Stark;
 
 // use std::error::Error;
@@ -371,7 +373,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     Ok(inputs)
 }
 
-fn generate_test_block_proof(
+fn get_test_block_proof(
     timestamp: u64,
     timing: &mut TimingTree,
     all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>,
@@ -404,6 +406,8 @@ fn generate_test_block_proof(
         block_metadata: inputs.block_metadata.clone(),
         block_hashes: inputs.block_hashes.clone(),
     };
+    log::info!("{:#?}", inputs0);
+    log::info!("{:#?}", dummy0);
     log::info!("Stage 1");
 
     let (root_proof0, pv0) = all_circuits.prove_root(&all_stark, &config, inputs0, timing, None)?;
@@ -447,6 +451,38 @@ fn generate_test_block_proof(
     Ok(block_proof0)
 }
 
+/// Caches proofs in `/tmp/zk_evm_test_blocks/`.
+fn get_test_block_proof_cached(
+    timestamp: u64,
+    timing: &mut TimingTree,
+    all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>,
+    all_stark: &AllStark<GoldilocksField, 2>,
+    config: &StarkConfig,
+) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
+    let mut path = env::temp_dir();
+    path.push("zk_evm_test");
+    path.set_file_name(format!("test_block_{timestamp}"));
+    path.set_extension(".blk");
+
+    if path.try_exists()? && fs::File::open(path.clone())?.metadata()?.len() > 0 {
+        let raw_blocks = fs::read(path)?;
+        return ProofWithPublicInputs::from_bytes(
+            raw_blocks,
+            &all_circuits.two_to_one_block.circuit.common,
+        );
+    }
+
+    let block = get_test_block_proof(timestamp, timing, all_circuits, all_stark, config)?;
+    let raw_block = ProofWithPublicInputs::to_bytes(&block);
+    // write to tmp
+    if let Some(p) = path.parent() {
+        fs::create_dir_all(p)?
+    };
+    fs::write(path, raw_block)?;
+    return Ok(block);
+}
+
+
 
 #[test]
 /// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"
@@ -479,7 +515,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     let unrelated_block_proofs: Vec<_> = some_timestamps
         .iter()
         .map(|&ts| {
-            generate_test_block_proof(ts, &mut timing, &all_circuits, &all_stark, &config)
+            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
         })
         .collect::<anyhow::Result<Vec<PISType>>>()?;
 
@@ -488,7 +524,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
         .iter()
         .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
 
-    log::info!("Stage 3: Aggregate block proofs");
+    log::info!("Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
     let pi0 = PublicValues::from_public_inputs(&bp[0].public_inputs);

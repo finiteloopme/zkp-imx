@@ -376,6 +376,7 @@ where
     pv1: PublicValuesTarget,
     pv0_hash: HashOutTarget,
     pv1_hash: HashOutTarget,
+    pv01_hash: HashOutTarget,
 }
 
 impl<F, C, const D: usize> TwoToOneBlockAggCircuitData<F, C, D>
@@ -415,6 +416,7 @@ where
             pv1,
             pv0_hash: todo!(),
             pv1_hash: todo!(),
+            pv01_hash: todo!(),
         })
     }
 }
@@ -1738,7 +1740,7 @@ where
         let pv1_hash = builder.add_virtual_hash_public_input();
 
         /// Output: agg_block_proof, agg_hash
-        let agg_hash_witness = builder.add_virtual_hash_public_input();
+        let pv01_hash = builder.add_virtual_hash_public_input();
 
         /// PrivateInput: p0, pv0, p1, pv1
         let proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
@@ -1759,7 +1761,7 @@ where
 
         builder.connect_hashes(pv0_hash, pv0_hash_computed);
         builder.connect_hashes(pv1_hash, pv1_hash_computed);
-        builder.connect_hashes(agg_hash_witness, agg_hash_computed);
+        builder.connect_hashes(pv01_hash, agg_hash_computed);
 
         let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
 
@@ -1774,8 +1776,9 @@ where
             proof1,
             pv0,
             pv1,
-            pv0_hash: pv0_hash_computed,
-            pv1_hash: pv1_hash_computed,
+            pv0_hash,
+            pv1_hash,
+            pv01_hash,
         }
     }
 
@@ -1811,6 +1814,8 @@ where
         let pp0 = C::InnerHasher::hash_no_pad(&proof0.public_inputs);
         let pp1 = C::InnerHasher::hash_no_pad(&proof1.public_inputs);
 
+        let pv01_hash = C::InnerHasher::two_to_one(pv0_hash,pv1_hash);
+
         debug_assert_eq!(pv0_hash, pp0);
         debug_assert_eq!(pv1_hash, pp1);
 
@@ -1821,7 +1826,8 @@ where
 
         // set hashes
         inputs.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
-        inputs.set_hash_target(self.two_to_one_block.pv0_hash,pv1_hash);
+        inputs.set_hash_target(self.two_to_one_block.pv1_hash,pv1_hash);
+        inputs.set_hash_target(self.two_to_one_block.pv01_hash,pv01_hash);
         //inputs.set_target_arr(targets, &pv0_hash.to_vec());
         //inputs.set_target_arr(targets, &pv1_hash.to_vec());
         // set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0_hash, &pv0).map_err(|_| {
