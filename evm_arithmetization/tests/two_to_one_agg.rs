@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::{env, fs};
 use std::str::FromStr;
 
-use env_logger::fmt::Timestamp;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
@@ -17,8 +16,6 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
-use serde::{Deserialize, Serialize};
-use starky::stark::Stark;
 
 // use std::error::Error;
 
@@ -26,6 +23,8 @@ type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
 type PwPIS = ProofWithPublicInputs<F,C,D>;
+
+/// Set this to true to cache blocks in `/tmp``.  This is intended mainly for developer experience and not for CI testing.
 const CACHE_TEST_BLOCKS: bool = false;
 
 
@@ -292,8 +291,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         block_bloom: [0.into(); 8],
     };
 
-    let mut contract_code = HashMap::new();
-    //contract_code.insert(keccak(vec![]), vec![]);
+    let contract_code = HashMap::new();
 
     let expected_state_trie_after: HashedPartialTrie = {
         let txdata_gas = 2 * 16;
@@ -344,7 +342,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     }
     .into();
 
-    let trie_roots_after = TrieRoots {
+    let _trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
@@ -382,8 +380,8 @@ fn get_test_block_proof(
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
 ) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
-    log::info!("Generating proof of block {}", timestamp);
     log::info!("Stage 0");
+    log::info!("Generating proof of block {}", timestamp);
     let inputs0 = empty_transfer(timestamp)?;
     let inputs = inputs0.clone();
     let dummy0 = GenerationInputs {
@@ -460,29 +458,50 @@ fn get_test_block_proof_cached(
     all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>,
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
-) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
+) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>>{
+    log::info!("Getting proof of block {}", timestamp);
+
+    // 1. Setup path
     let mut path = env::temp_dir();
     path.push("zk_evm_test");
-    path.set_file_name(format!("test_block_{timestamp}"));
-    path.set_extension("blk");
+    path.push(format!("test_block_{timestamp}.bpf"));
     log::info!("{:#?}", path);
 
+    // 2. Read cached block from disc and return early.
     if CACHE_TEST_BLOCKS && path.try_exists()? && fs::File::open(path.clone())?.metadata()?.len() > 0 {
-        let raw_blocks = fs::read(path)?;
+        let raw_block = fs::read(path)?;
         return ProofWithPublicInputs::from_bytes(
-            raw_blocks,
+            raw_block,
             &all_circuits.two_to_one_block.circuit.common,
         );
     }
 
-    let block = get_test_block_proof(timestamp, timing, all_circuits, all_stark, config)?;
-    let raw_block = ProofWithPublicInputs::to_bytes(&block);
-    // write to tmp
-    if let Some(p) = path.parent() {
-        fs::create_dir_all(p)?
-    };
-    fs::write(path, raw_block)?;
-    return Ok(block);
+    // 3. Compute new block proof.
+    let block_proof = get_test_block_proof(timestamp, timing, all_circuits, all_stark, config)?;
+
+    // 4. Write block to disc cache and validate.
+    if CACHE_TEST_BLOCKS {
+        // write to tmp
+        let raw_block = ProofWithPublicInputs::to_bytes(&block_proof);
+
+        if let Some(p) = path.parent() {
+            fs::create_dir_all(p)?
+        };
+        fs::write(path.clone(), &raw_block)?;
+        log::info!("Succesfully wrote blockproof to {:#?}", path);
+
+        // Todo: move to file with `from_bytes`
+        let written_block = fs::read(path.clone())?;
+        assert_eq!(&raw_block, &written_block);
+        let restored_block = ProofWithPublicInputs::from_bytes(
+            written_block,
+            &all_circuits.two_to_one_block.circuit.common,
+        )?;
+        assert_eq!(block_proof, restored_block);
+        log::info!("Succesfully validated blockproof from {:#?}", path);
+    }
+
+    return Ok(block_proof);
 }
 
 

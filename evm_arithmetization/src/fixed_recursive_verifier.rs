@@ -1736,7 +1736,7 @@ where
         let pv0_hash = builder.add_virtual_hash_public_input();
         let pv1_hash = builder.add_virtual_hash_public_input();
 
-        /// Output: agg_block_proof, agg_hash
+        /// Output: agg_block_proof, pv01_hash
         let pv01_hash = builder.add_virtual_hash_public_input();
 
         /// PrivateInput: p0, pv0, p1, pv1
@@ -1745,6 +1745,7 @@ where
         let proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
         let pv1 = add_virtual_public_values(&mut builder);
 
+        // TODO: to_public_inputs needs to be finished
         let pv0_vec = pv0.to_public_inputs();
         let pv1_vec = pv1.to_public_inputs();
         // check each of the supplied hashes correspond to what we can compute directly
