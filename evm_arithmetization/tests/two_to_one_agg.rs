@@ -25,7 +25,7 @@ type C = PoseidonGoldilocksConfig;
 type PwPIS = ProofWithPublicInputs<F,C,D>;
 
 /// Set this to true to cache blocks in `/tmp``.  This is intended mainly for developer experience and not for CI testing.
-const CACHE_TEST_BLOCKS: bool = false;
+const CACHE_TEST_BLOCKS: bool = true;
 
 
 /// Get `GenerationInputs` for a simple token transfer txn, where the block has
@@ -478,6 +478,7 @@ fn get_test_block_proof_cached(
 
     // 3. Compute new block proof.
     let block_proof = get_test_block_proof(timestamp, timing, all_circuits, all_stark, config)?;
+    all_circuits.verify_block(&block_proof)?;
 
     // 4. Write block to disc cache and validate.
     if CACHE_TEST_BLOCKS {

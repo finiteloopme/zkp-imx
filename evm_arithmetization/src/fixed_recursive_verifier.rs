@@ -1439,6 +1439,11 @@ where
         pv0: PublicValues,
         pv1: PublicValues,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
+        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
+        debug_assert_eq!(pv0, ppp0);
+        debug_assert_eq!(pv1, ppp1);
+
         let mut inputs = PartialWitness::new();
 
         inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof0, proof0);
