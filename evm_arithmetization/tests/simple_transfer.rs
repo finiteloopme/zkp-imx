@@ -153,7 +153,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         },
     };
 
-    let max_cpu_len_log = 20;
+    let max_cpu_len_log = 15;
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
     let proofs = prove_all_segments::<F, C, D>(

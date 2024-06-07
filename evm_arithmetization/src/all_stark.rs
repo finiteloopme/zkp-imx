@@ -24,6 +24,7 @@ use crate::logic;
 use crate::logic::LogicStark;
 use crate::memory::memory_stark::MemoryStark;
 use crate::memory::memory_stark::{self, ctl_context_pruning_looking};
+use crate::memory_after::memory_after_stark::{self, MemoryAfterStark};
 use crate::memory_continuation::memory_continuation_stark::{self, MemoryContinuationStark};
 
 /// Structure containing all STARKs and the cross-table lookups.
@@ -37,7 +38,7 @@ pub struct AllStark<F: RichField + Extendable<D>, const D: usize> {
     pub(crate) logic_stark: LogicStark<F, D>,
     pub(crate) memory_stark: MemoryStark<F, D>,
     pub(crate) mem_before_stark: MemoryContinuationStark<F, D>,
-    pub(crate) mem_after_stark: MemoryContinuationStark<F, D>,
+    pub(crate) mem_after_stark: MemoryAfterStark<F, D>,
     pub(crate) cross_table_lookups: Vec<CrossTableLookup<F>>,
 }
 
@@ -54,7 +55,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
             logic_stark: LogicStark::default(),
             memory_stark: MemoryStark::default(),
             mem_before_stark: MemoryContinuationStark::default(),
-            mem_after_stark: MemoryContinuationStark::default(),
+            mem_after_stark: MemoryAfterStark::default(),
             cross_table_lookups: all_cross_table_lookups(),
         }
     }
@@ -363,8 +364,8 @@ fn ctl_mem_after<F: Field>() -> CrossTableLookup<F> {
     let all_lookers = vec![memory_looking];
     let mem_after_looked = TableWithColumns::new(
         *Table::MemAfter,
-        memory_continuation_stark::ctl_data(),
-        memory_continuation_stark::ctl_filter(),
+        memory_after_stark::ctl_data(),
+        memory_after_stark::ctl_filter(),
     );
     CrossTableLookup::new(all_lookers, mem_after_looked)
 }
