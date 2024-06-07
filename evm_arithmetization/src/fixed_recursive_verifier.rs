@@ -1737,26 +1737,51 @@ where
         C::Hasher: AlgebraicHasher<F>,
     {
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
-        /// PublicInput: hash(pv0), hash(pv1)
+        /// PublicInput: hash(pv0), hash(pv1), pv01_hash
         let pv0_hash = builder.add_virtual_hash_public_input();
         let pv1_hash = builder.add_virtual_hash_public_input();
-
-        /// Output: agg_block_proof, pv01_hash
         let pv01_hash = builder.add_virtual_hash_public_input();
 
-        /// PrivateInput: p0, pv0, p1, pv1
+        /// PrivateInput: p0, p1, pv0, pv1
         let proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
-        let pv0 = add_virtual_public_values(&mut builder);
         let proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
-        let pv1 = add_virtual_public_values(&mut builder);
 
-        // TODO: to_public_inputs needs to be finished
-        let pv0_vec = pv0.to_public_inputs();
-        let pv1_vec = pv1.to_public_inputs();
+        let pre_pv0 = builder.num_public_inputs();
+        let pv0 = add_virtual_public_values(&mut builder);
+        let post_pv0 = builder.num_public_inputs();
+        let mut pv0_targets = vec![];
+        pv0_targets.extend_from_slice(&builder.public_inputs[pre_pv0..post_pv0]);
+
+        let pre_pv1 = builder.num_public_inputs();
+        let pv1 = add_virtual_public_values(&mut builder);
+        let post_pv1 = builder.num_public_inputs();
+        let mut pv1_targets = vec![];
+        pv1_targets.extend_from_slice(&builder.public_inputs[pre_pv1..post_pv1]);
+
+        let pv0_vec = {
+            let mut res = vec![];
+            pv0.to_public_inputs(&mut res);
+            res
+        };
+        let pv1_vec = {
+            let mut res = vec![];
+            pv1.to_public_inputs(&mut res);
+            res
+        };
+        log::info!("{} vs {}", pv0_vec.len(), pv0_targets.len());
+        assert_eq!(pv1_vec, pv1_targets);
+
+
+        assert_eq!(PublicValuesTarget::from_public_inputs(&pv0_targets), pv0);
+        assert_eq!(PublicValuesTarget::from_public_inputs(&pv1_targets), pv1);
+
+        //let circuit_pv = builder.public_values;
+
+
         // check each of the supplied hashes correspond to what we can compute directly
         // from the witnesses (pv0,pv1)
-        let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_vec);
-        let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_vec);
+        let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_targets);
+        let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_targets);
 
         let mut agg_vec = vec![];
         agg_vec.extend(&pv0_hash_computed.elements);
@@ -1802,28 +1827,23 @@ where
         &self,
         proof0: &ProofWithPublicInputs<F, C, D>,
         proof1: &ProofWithPublicInputs<F, C, D>,
-        pv0: PublicValues,
-        pv1: PublicValues,
+        //pv0: PublicValues,
+        //pv1: PublicValues,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut inputs = PartialWitness::new();
 
-        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
-        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
-        debug_assert_eq!(pv0, ppp0);
-        debug_assert_eq!(pv1, ppp1);
+        // check public values match with the pwpis.
+        //let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
+        //let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
+        //debug_assert_eq!(pv0, ppp0);
+        //debug_assert_eq!(pv1, ppp1);
 
+        // get hashes and combine
         let pv0_hash = proof0.get_public_inputs_hash();
         let pv1_hash = proof1.get_public_inputs_hash();
-        let pp0 = C::InnerHasher::hash_no_pad(&proof0.public_inputs);
-        let pp1 = C::InnerHasher::hash_no_pad(&proof1.public_inputs);
-
         let pv01_hash = C::InnerHasher::two_to_one(pv0_hash,pv1_hash);
 
-        debug_assert_eq!(pv0_hash, pp0);
-        debug_assert_eq!(pv1_hash, pp1);
-
-        //assert!(false, "HUURRRAYY!");
-
+        // set proofs
         inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
         inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
 
@@ -1831,15 +1851,8 @@ where
         inputs.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
         inputs.set_hash_target(self.two_to_one_block.pv1_hash,pv1_hash);
         inputs.set_hash_target(self.two_to_one_block.pv01_hash,pv01_hash);
-        //inputs.set_target_arr(targets, &pv0_hash.to_vec());
-        //inputs.set_target_arr(targets, &pv1_hash.to_vec());
-        // set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0_hash, &pv0).map_err(|_| {
-        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        // })?;
-        // set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1_hash, &pv1).map_err(|_| {
-        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        // })?;
 
+        // prove
         let proof = self.two_to_one_block.circuit.prove(inputs)?;
         Ok(proof)
     }

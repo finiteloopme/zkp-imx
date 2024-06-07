@@ -472,7 +472,7 @@ fn get_test_block_proof_cached(
         let raw_block = fs::read(path)?;
         return ProofWithPublicInputs::from_bytes(
             raw_block,
-            &all_circuits.two_to_one_block.circuit.common,
+            &all_circuits.block.circuit.common,
         );
     }
 
@@ -496,7 +496,7 @@ fn get_test_block_proof_cached(
         assert_eq!(&raw_block, &written_block);
         let restored_block = ProofWithPublicInputs::from_bytes(
             written_block,
-            &all_circuits.two_to_one_block.circuit.common,
+            &all_circuits.block.circuit.common,
         )?;
         assert_eq!(block_proof, restored_block);
         log::info!("Succesfully validated blockproof from {:#?}", path);
@@ -535,7 +535,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
 
     log::info!("Stage 1:  Compute block proofs");
     let some_timestamps = [127, 42, 65];
-    let unrelated_block_proofs: Vec<_> = some_timestamps
+    let unrelated_block_proofs = some_timestamps
         .iter()
         .map(|&ts| {
             get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
@@ -550,16 +550,16 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     log::info!("Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let pi0 = PublicValues::from_public_inputs(&bp[0].public_inputs);
-    let pi1 = PublicValues::from_public_inputs(&bp[1].public_inputs);
+    // let pi0 = PublicValues::from_public_inputs(&bp[0].public_inputs);
+    // let pi1 = PublicValues::from_public_inputs(&bp[1].public_inputs);
 
-    let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0], &bp[1], pi0, pi1)?;
+    let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0], &bp[1])?;
     all_circuits.verify_two_to_one_block_einar(&proof01)?;
 
-    let pi01 = PublicValues::from_public_inputs(&proof01.public_inputs);
-    let pi2 = PublicValues::from_public_inputs(&bp[2].public_inputs);
+    // let pi01 = PublicValues::from_public_inputs(&proof01.public_inputs);
+    // let pi2 = PublicValues::from_public_inputs(&bp[2].public_inputs);
 
-    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &bp[2], pi01, pi2)?;
+    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &bp[2])?;
     all_circuits.verify_two_to_one_block_einar(&proof012)?;
     Ok(())
 }
