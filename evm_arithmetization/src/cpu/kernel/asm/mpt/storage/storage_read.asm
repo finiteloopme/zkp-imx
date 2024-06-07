@@ -10,6 +10,7 @@ global sload_current:
     // TEST STORAGE linked list
     DUP1
     %read_storage_linked_list
+    POP // the first element is `is_found`
     %mload_trie_data
     %stack (ll_value, slot) -> (slot, after_storage_read, ll_value)
 
