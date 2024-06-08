@@ -1775,12 +1775,9 @@ where
         // assert_eq!(pv0_vec, pv0_targets);
         // assert_eq!(pv1_vec, pv1_targets);
 
-
         assert_eq!(PublicValuesTarget::from_public_inputs(&pv0_vec), pv0);
         assert_eq!(PublicValuesTarget::from_public_inputs(&pv1_vec), pv1);
-        assert!(false, "Hoooray!!");
 
-        //let circuit_pv = builder.public_values;
 
 
         // check each of the supplied hashes correspond to what we can compute directly
@@ -1837,11 +1834,12 @@ where
         //pv0: PublicValues,
         //pv1: PublicValues,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let mut inputs = PartialWitness::new();
+        let mut witness = PartialWitness::new();
+        let data = &self.two_to_one_block;
 
         // check public values match with the pwpis.
-        //let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
-        //let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
+        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
+        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
         //debug_assert_eq!(pv0, ppp0);
         //debug_assert_eq!(pv1, ppp1);
 
@@ -1851,16 +1849,25 @@ where
         let pv01_hash = C::InnerHasher::two_to_one(pv0_hash,pv1_hash);
 
         // set proofs
-        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
-        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
+        witness.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
+        witness.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
+
+        // set private public inputs
+        // copied from [`set_proof_with_pis_target`]
+        for (&pi_t, &pi) in data.proof0.public_inputs.iter().zip_eq(&proof0.public_inputs) {
+            witness.set_target(pi_t, pi);
+        }
+        for (&pi_t, &pi) in data.proof1.public_inputs.iter().zip_eq(&proof1.public_inputs) {
+            witness.set_target(pi_t, pi);
+        }
 
         // set hashes
-        inputs.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
-        inputs.set_hash_target(self.two_to_one_block.pv1_hash,pv1_hash);
-        inputs.set_hash_target(self.two_to_one_block.pv01_hash,pv01_hash);
+        witness.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
+        witness.set_hash_target(self.two_to_one_block.pv1_hash,pv1_hash);
+        witness.set_hash_target(self.two_to_one_block.pv01_hash,pv01_hash);
 
         // prove
-        let proof = self.two_to_one_block.circuit.prove(inputs)?;
+        let proof = self.two_to_one_block.circuit.prove(witness)?;
         Ok(proof)
     }
 
