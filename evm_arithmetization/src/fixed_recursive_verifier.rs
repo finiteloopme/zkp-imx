@@ -1838,12 +1838,6 @@ where
         let mut witness = PartialWitness::new();
         let data = &self.two_to_one_block;
 
-        // check public values match with the pwpis.
-        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
-        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
-        //debug_assert_eq!(pv0, ppp0);
-        //debug_assert_eq!(pv1, ppp1);
-
         // get hashes and combine
         let pv0_hash = proof0.get_public_inputs_hash();
         let pv1_hash = proof1.get_public_inputs_hash();
@@ -1852,15 +1846,6 @@ where
         // set proofs
         witness.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
         witness.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
-
-        // set private public inputs
-        // copied from [`set_proof_with_pis_target`]
-        // for (&pi_t, &pi) in data.proof0.public_inputs.iter().zip_eq(&proof0.public_inputs) {
-        //     witness.set_target(pi_t, pi);
-        // }
-        // for (&pi_t, &pi) in data.proof1.public_inputs.iter().zip_eq(&proof1.public_inputs) {
-        //     witness.set_target(pi_t, pi);
-        // }
 
         // set hashes
         witness.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
