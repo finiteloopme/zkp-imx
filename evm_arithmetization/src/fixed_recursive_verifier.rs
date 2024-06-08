@@ -1787,15 +1787,16 @@ where
         let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_vec);
         let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_vec);
 
-        let mut agg_vec = vec![];
-        agg_vec.extend(&pv0_hash_computed.elements);
-        agg_vec.extend(&pv1_hash_computed.elements);
-        let agg_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(agg_vec);
+        let mut pv01_vec = vec![];
+        pv01_vec.extend(&pv0_hash_computed.elements);
+        pv01_vec.extend(&pv1_hash_computed.elements);
+        let pv01_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv01_vec);
 
         builder.connect_hashes(pv0_hash, pv0_hash_computed);
         builder.connect_hashes(pv1_hash, pv1_hash_computed);
-        builder.connect_hashes(pv01_hash, agg_hash_computed);
+        builder.connect_hashes(pv01_hash, pv01_hash_computed);
 
+        /// TODO what happens here?
         let block_verifier_data =
             builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
 
@@ -1854,12 +1855,12 @@ where
 
         // set private public inputs
         // copied from [`set_proof_with_pis_target`]
-        for (&pi_t, &pi) in data.proof0.public_inputs.iter().zip_eq(&proof0.public_inputs) {
-            witness.set_target(pi_t, pi);
-        }
-        for (&pi_t, &pi) in data.proof1.public_inputs.iter().zip_eq(&proof1.public_inputs) {
-            witness.set_target(pi_t, pi);
-        }
+        // for (&pi_t, &pi) in data.proof0.public_inputs.iter().zip_eq(&proof0.public_inputs) {
+        //     witness.set_target(pi_t, pi);
+        // }
+        // for (&pi_t, &pi) in data.proof1.public_inputs.iter().zip_eq(&proof1.public_inputs) {
+        //     witness.set_target(pi_t, pi);
+        // }
 
         // set hashes
         witness.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
