@@ -279,6 +279,9 @@ pub struct PublicValuesTarget {
 }
 
 impl PublicValuesTarget {
+    pub(crate) const SIZE: usize = TrieRootsTarget::SIZE + TrieRootsTarget::SIZE
+     + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE + ExtraBlockDataTarget::SIZE;
+
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         let TrieRootsTarget {
@@ -438,12 +441,12 @@ impl PublicValuesTarget {
     // Todo
     // maybe should be `impl Into<vec> for PublicValuesTarget`.
     pub(crate) fn to_public_inputs(&self, res: &mut Vec<Target>) {
-        self.block_hashes.to_public_inputs(res);
         self.trie_roots_before.to_public_inputs(res);
         self.trie_roots_after.to_public_inputs(res);
         self.block_metadata.to_public_inputs(res);
         self.block_hashes.to_public_inputs(res);
         self.extra_block_data.to_public_inputs(res);
+        assert_eq!(res.len(), PublicValuesTarget::SIZE);
     }
 
     /// Returns the public values in `pv0` or `pv1` depening on `condition`.

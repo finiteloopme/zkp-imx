@@ -38,6 +38,7 @@ use starky::stark::Stark;
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
+use crate::private_public_values;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
@@ -1746,17 +1747,19 @@ where
         let proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
         let proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
 
-        let pre_pv0 = builder.num_public_inputs();
-        let pv0 = add_virtual_public_values(&mut builder);
-        let post_pv0 = builder.num_public_inputs();
-        let mut pv0_targets = vec![];
-        pv0_targets.extend_from_slice(&builder.public_inputs[pre_pv0..post_pv0]);
+        // Important, what are called Public Values are actually supplied to the circuit as Private Values.
+        // let pre_pv0 = builder.num_public_inputs();
+        //was: let pv0 = add_virtual_public_values(&mut builder);
+        let pv0 = private_public_values::add_virtual_public_values(&mut builder);
+        // let post_pv0 = builder.num_public_inputs();
+        // let mut pv0_targets = vec![];
+        // pv0_targets.extend_from_slice(&builder.public_inputs[pre_pv0..post_pv0]);
 
-        let pre_pv1 = builder.num_public_inputs();
-        let pv1 = add_virtual_public_values(&mut builder);
-        let post_pv1 = builder.num_public_inputs();
-        let mut pv1_targets = vec![];
-        pv1_targets.extend_from_slice(&builder.public_inputs[pre_pv1..post_pv1]);
+        // let pre_pv1 = builder.num_public_inputs();
+        let pv1 = private_public_values::add_virtual_public_values(&mut builder);
+        // let post_pv1 = builder.num_public_inputs();
+        // let mut pv1_targets = vec![];
+        // pv1_targets.extend_from_slice(&builder.public_inputs[pre_pv1..post_pv1]);
 
         let pv0_vec = {
             let mut res = vec![];
@@ -1768,20 +1771,24 @@ where
             pv1.to_public_inputs(&mut res);
             res
         };
-        log::info!("{} vs {}", pv0_vec.len(), pv0_targets.len());
-        assert_eq!(pv1_vec, pv1_targets);
+        // log::info!("{} vs {}", pv0_vec.len(), pv0_targets.len());
+        // assert_eq!(pv0_vec, pv0_targets);
+        // assert_eq!(pv1_vec, pv1_targets);
 
 
-        assert_eq!(PublicValuesTarget::from_public_inputs(&pv0_targets), pv0);
-        assert_eq!(PublicValuesTarget::from_public_inputs(&pv1_targets), pv1);
+        assert_eq!(PublicValuesTarget::from_public_inputs(&pv0_vec), pv0);
+        assert_eq!(PublicValuesTarget::from_public_inputs(&pv1_vec), pv1);
+        assert!(false, "Hoooray!!");
 
         //let circuit_pv = builder.public_values;
 
 
         // check each of the supplied hashes correspond to what we can compute directly
         // from the witnesses (pv0,pv1)
-        let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_targets);
-        let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_targets);
+        // let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_targets);
+        // let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_targets);
+        let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_vec);
+        let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_vec);
 
         let mut agg_vec = vec![];
         agg_vec.extend(&pv0_hash_computed.elements);
