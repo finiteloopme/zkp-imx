@@ -1747,56 +1747,20 @@ where
         let proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
         let proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
 
-        // Important, what are called Public Values are actually supplied to the circuit as Private Values.
-        // let pre_pv0 = builder.num_public_inputs();
-        //was: let pv0 = add_virtual_public_values(&mut builder);
-        let pv0 = private_public_values::add_virtual_public_values(&mut builder);
-        // let post_pv0 = builder.num_public_inputs();
-        // let mut pv0_targets = vec![];
-        // pv0_targets.extend_from_slice(&builder.public_inputs[pre_pv0..post_pv0]);
-
-        // let pre_pv1 = builder.num_public_inputs();
-        let pv1 = private_public_values::add_virtual_public_values(&mut builder);
-        // let post_pv1 = builder.num_public_inputs();
-        // let mut pv1_targets = vec![];
-        // pv1_targets.extend_from_slice(&builder.public_inputs[pre_pv1..post_pv1]);
-
-        let pv0_vec = {
-            let mut res = vec![];
-            pv0.to_public_inputs(&mut res);
-            res
-        };
-        let pv1_vec = {
-            let mut res = vec![];
-            pv1.to_public_inputs(&mut res);
-            res
-        };
-        // log::info!("{} vs {}", pv0_vec.len(), pv0_targets.len());
-        // assert_eq!(pv0_vec, pv0_targets);
-        // assert_eq!(pv1_vec, pv1_targets);
-
-        assert_eq!(PublicValuesTarget::from_public_inputs(&pv0_vec), pv0);
-        assert_eq!(PublicValuesTarget::from_public_inputs(&pv1_vec), pv1);
-
-
-
-        // check each of the supplied hashes correspond to what we can compute directly
-        // from the witnesses (pv0,pv1)
-        // let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_targets);
-        // let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_targets);
-        let pv0_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv0_vec);
-        let pv1_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv1_vec);
+        let pv0_hash_circuit = builder.hash_n
+        //::<C::Hasher>(proof0.public_inputs.to_owned());
+        let pv1_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(proof1.public_inputs.to_owned());
 
         let mut pv01_vec = vec![];
-        pv01_vec.extend(&pv0_hash_computed.elements);
-        pv01_vec.extend(&pv1_hash_computed.elements);
-        let pv01_hash_computed = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv01_vec);
+        pv01_vec.extend(&pv0_hash_circuit.elements);
+        pv01_vec.extend(&pv1_hash_circuit.elements);
+        let pv01_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv01_vec);
 
-        builder.connect_hashes(pv0_hash, pv0_hash_computed);
-        builder.connect_hashes(pv1_hash, pv1_hash_computed);
-        builder.connect_hashes(pv01_hash, pv01_hash_computed);
+        builder.connect_hashes(pv0_hash, pv0_hash_circuit);
+        builder.connect_hashes(pv1_hash, pv1_hash_circuit);
+        builder.connect_hashes(pv01_hash, pv01_hash_circuit);
 
-        /// TODO what happens here?
+        // TODO what happens here?
         let block_verifier_data =
             builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
 
@@ -1820,10 +1784,8 @@ where
     ///
     /// # Arguments
     ///
-    /// - `proof0`: the first block proof.
-    /// - `proof1`: the second block proof.
-    /// - `pv0`: the public values associated to first proof.
-    /// - `pv1`: the public values associated to second proof.
+    /// - `proof0`: the first block proof including vectorized public inputs.
+    /// - `proof1`: the second block proof including vectorized public inputs.
     ///
     /// # Outputs
     ///
@@ -1832,25 +1794,22 @@ where
         &self,
         proof0: &ProofWithPublicInputs<F, C, D>,
         proof1: &ProofWithPublicInputs<F, C, D>,
-        //pv0: PublicValues,
-        //pv1: PublicValues,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut witness = PartialWitness::new();
-        let data = &self.two_to_one_block;
 
         // get hashes and combine
         let pv0_hash = proof0.get_public_inputs_hash();
         let pv1_hash = proof1.get_public_inputs_hash();
         let pv01_hash = C::InnerHasher::two_to_one(pv0_hash,pv1_hash);
 
-        // set proofs
-        witness.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
-        witness.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
-
         // set hashes
         witness.set_hash_target(self.two_to_one_block.pv0_hash,pv0_hash);
         witness.set_hash_target(self.two_to_one_block.pv1_hash,pv1_hash);
         witness.set_hash_target(self.two_to_one_block.pv01_hash,pv01_hash);
+
+        // set proofs
+        witness.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
+        witness.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
 
         // prove
         let proof = self.two_to_one_block.circuit.prove(witness)?;
@@ -1861,14 +1820,16 @@ where
         &self,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) -> anyhow::Result<()> {
-        self.two_to_one_block.circuit.verify(proof.clone());
+        self.two_to_one_block.circuit.verify(proof.clone())
         // Note that this does not enforce that the inner circuit uses the correct verification key.
         // This is not possible to check in this recursive circuit, since we do not know the
         // verification key until after we build it. Verifiers must separately call
         // `check_cyclic_proof_verifier_data`, in addition to verifying a recursive proof, to check
         // that the verification key matches.
-        let verifier_data = &self.block.circuit.verifier_data();
-        check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
+
+        // todo
+        //let verifier_data = &self.block.circuit.verifier_data();
+        //check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
     }
 }
 

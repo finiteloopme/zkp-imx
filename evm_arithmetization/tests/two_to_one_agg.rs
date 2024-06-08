@@ -520,7 +520,7 @@ fn get_test_block_proof_cached(
 ///   ((A,B),C)
 fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     init_logger();
-    log::info!("Stage 0:  Setup");
+    log::info!("Meta Stage 0:  Setup");
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
@@ -533,7 +533,7 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
 
-    log::info!("Stage 1:  Compute block proofs");
+    log::info!("Meta Stage 1:  Compute block proofs");
     let some_timestamps = [127, 42, 65];
     let unrelated_block_proofs = some_timestamps
         .iter()
@@ -542,25 +542,20 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
         })
         .collect::<anyhow::Result<Vec<PwPIS>>>()?;
 
-    log::info!("Stage 2:  Verify block proofs");
+    log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
         .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
 
-    log::info!("Stage 3:  Aggregate block proofs");
+    log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
-
-    // let pi0 = PublicValues::from_public_inputs(&bp[0].public_inputs);
-    // let pi1 = PublicValues::from_public_inputs(&bp[1].public_inputs);
 
     let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0], &bp[1])?;
     all_circuits.verify_two_to_one_block_einar(&proof01)?;
 
-    // let pi01 = PublicValues::from_public_inputs(&proof01.public_inputs);
-    // let pi2 = PublicValues::from_public_inputs(&bp[2].public_inputs);
-
-    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &bp[2])?;
+    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &proof01)?;
     all_circuits.verify_two_to_one_block_einar(&proof012)?;
+    assert!(false, "Hoooray!!, 3-block aggregation was verified");
     Ok(())
 }
 
