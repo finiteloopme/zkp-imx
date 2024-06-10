@@ -26,11 +26,10 @@ pub(crate) const fn value_limb(i: usize) -> usize {
 // same in this row and the next, but `ADDR_SEGMENT` is not.
 pub(crate) const CONTEXT_FIRST_CHANGE: usize = VALUE_START + VALUE_LIMBS;
 pub(crate) const SEGMENT_FIRST_CHANGE: usize = CONTEXT_FIRST_CHANGE + 1;
-pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
 
 // We use a range check to enforce the ordering. To use less columns, it's split
 // between low and high limbs.
-pub(crate) const RC_LOW: usize = VIRTUAL_FIRST_CHANGE + 1;
+pub(crate) const RC_LOW: usize = SEGMENT_FIRST_CHANGE + 1;
 pub(crate) const RC_HIGH: usize = RC_LOW + 1;
 /// The counter column (used for the range check) starts from 0 and increments.
 pub(crate) const COUNTER: usize = RC_HIGH + 1;

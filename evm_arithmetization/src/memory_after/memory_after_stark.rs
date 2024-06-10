@@ -19,8 +19,8 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::columns::{
-    value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, FILTER,
-    NUM_COLUMNS, SEGMENT_FIRST_CHANGE, VIRTUAL_FIRST_CHANGE,
+    value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, COUNTER, FILTER,
+    FREQUENCIES, NUM_COLUMNS, RC_HIGH, SEGMENT_FIRST_CHANGE,
 };
 use crate::all_stark::EvmStarkFrame;
 use crate::generation::MemBeforeValues;
@@ -78,62 +78,66 @@ pub(crate) struct MemoryAfterStark<F, const D: usize> {
     f: PhantomData<F>,
 }
 
-/// Generates the `_FIRST_CHANGE` columns and the `RANGE_CHECK` column in the
-/// trace.
+/// Generates the `_FIRST_CHANGE` columns and the `RC_LOW`, `RC_HIGH` columns in
+/// the trace.
 pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
     trace_rows: &mut [[F; NUM_COLUMNS]],
+    unpadded_len: usize,
 ) {
     let num_ops = trace_rows.len();
-    for idx in 0..num_ops {
+    for idx in 0..unpadded_len - 1 {
         let row = trace_rows[idx].as_slice();
-        let next_row = if idx == num_ops - 1 {
-            trace_rows[0].as_slice()
-        } else {
-            trace_rows[idx + 1].as_slice()
-        };
+        if row[FILTER] == F::ONE {
+            let next_row = trace_rows[idx + 1].as_slice();
 
-        let context = row[ADDR_CONTEXT];
-        let segment = row[ADDR_SEGMENT];
-        let virt = row[ADDR_VIRTUAL];
-        let next_context = next_row[ADDR_CONTEXT];
-        let next_segment = next_row[ADDR_SEGMENT];
-        let next_virt = next_row[ADDR_VIRTUAL];
+            let context: F = row[ADDR_CONTEXT];
+            let segment = row[ADDR_SEGMENT];
+            let virt = row[ADDR_VIRTUAL];
+            let next_context = next_row[ADDR_CONTEXT];
+            let next_segment = next_row[ADDR_SEGMENT];
+            let next_virt = next_row[ADDR_VIRTUAL];
 
-        let context_changed = context != next_context;
-        let segment_changed = segment != next_segment;
-        let virtual_changed = virt != next_virt;
+            let context_changed = context != next_context;
+            let segment_changed = segment != next_segment;
 
-        let context_first_change = context_changed;
-        let segment_first_change = segment_changed && !context_first_change;
-        let virtual_first_change =
-            virtual_changed && !segment_first_change && !context_first_change;
+            let context_first_change = context_changed;
+            let segment_first_change = segment_changed && !context_first_change;
 
-        let row = trace_rows[idx].as_mut_slice();
-        row[CONTEXT_FIRST_CHANGE] = F::from_bool(context_first_change);
-        row[SEGMENT_FIRST_CHANGE] = F::from_bool(segment_first_change);
-        row[VIRTUAL_FIRST_CHANGE] = F::from_bool(virtual_first_change);
+            let row = trace_rows[idx].as_mut_slice();
+            row[CONTEXT_FIRST_CHANGE] = F::from_bool(context_first_change);
+            row[SEGMENT_FIRST_CHANGE] = F::from_bool(segment_first_change);
 
-        row[RC_LOW] = if idx == num_ops - 1 {
-            F::ZERO
-        } else if context_first_change {
-            next_context - context - F::ONE
-        } else if segment_first_change {
-            next_segment - segment - F::ONE
-        } else if virtual_first_change {
-            next_virt - virt - F::ONE
-        } else {
-            next_timestamp - timestamp
-        };
+            let rc_value = if context_first_change {
+                next_context - context - F::ONE
+            } else if segment_first_change {
+                next_segment - segment - F::ONE
+            } else {
+                next_virt - virt - F::ONE
+            };
 
-        assert!(
-            row[RANGE_CHECK].to_canonical_u64() < num_ops as u64,
-            "Range check of {} is too large. Bug in fill_gaps?",
-            row[RANGE_CHECK]
-        );
+            assert!(
+                rc_value.to_canonical_u64() < (num_ops * num_ops) as u64,
+                "Range check of {} is too large.",
+                rc_value
+            );
+        }
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> MemoryAfterStark<F, D> {
+    /// Generates the `COUNTER` and `FREQUENCIES` columns, given
+    /// a trace in column-major form.
+    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>]) {
+        let height = trace_col_vecs[0].len();
+        trace_col_vecs[COUNTER] = (0..height).map(|i| F::from_canonical_usize(i)).collect();
+
+        for i in 0..height {
+            let rc_low = trace_col_vecs[RC_LOW][i].to_canonical_u64() as usize;
+            let rc_high = trace_col_vecs[RC_HIGH][i].to_canonical_u64() as usize;
+            trace_col_vecs[FREQUENCIES][rc_low] += F::ONE;
+            trace_col_vecs[FREQUENCIES][rc_high] += F::ONE;
+        }
+    }
     pub(crate) fn generate_trace(
         &self,
         propagated_values: Vec<Vec<F>>,
@@ -141,18 +145,22 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryAfterStark<F, D> {
         // Set the trace to the `propagated_values` provided by `MemoryStark`.
         // let mut rows = propagated_values;
         let num_rows = propagated_values.len();
-        let mut rows: Vec<Vec<F>> = vec![vec![F::ZERO; NUM_COLUMNS]; num_rows];
+        let mut rows: Vec<[F; NUM_COLUMNS]> = vec![[F::ZERO; NUM_COLUMNS]; num_rows];
 
         for (index, row) in propagated_values.into_iter().enumerate() {
             rows[index][0..12].copy_from_slice(&row);
         }
 
-        let num_rows_padded = max(128, num_rows.next_power_of_two());
+        let num_rows_padded = max(1024, num_rows.next_power_of_two());
         for _ in num_rows..num_rows_padded {
-            rows.push(vec![F::ZERO; NUM_COLUMNS]);
+            rows.push([F::ZERO; NUM_COLUMNS]);
         }
 
-        let cols = transpose(&rows);
+        generate_first_change_flags_and_rc(rows.as_mut_slice(), num_rows);
+
+        let trace_row_vecs: Vec<_> = rows.into_iter().map(|row| row.to_vec()).collect();
+
+        let cols = transpose(&trace_row_vecs);
 
         cols.into_iter()
             .map(|column| PolynomialValues::new(column))
