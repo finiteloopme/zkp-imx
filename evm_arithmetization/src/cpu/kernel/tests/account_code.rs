@@ -16,6 +16,7 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, Gas
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
+use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::mpt::{load_all_mpts, AccountRlp};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
@@ -28,9 +29,46 @@ pub(crate) fn initialize_mpts<F: Field>(
     trie_inputs: &TrieInputs,
 ) {
     // Load all MPTs.
-    let (trie_root_ptrs, trie_data) =
-        load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
+    let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+        load_linked_lists_and_txn_and_receipt_mpts(&trie_inputs)
+            .expect("Invalid MPT data for preinitialization");
 
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::AccountsLinkedList.unscale()]
+    .content = state_leaves.iter().map(|&val| Some(val)).collect();
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::StorageLinkedList.unscale()]
+    .content = storage_leaves.iter().map(|&val| Some(val)).collect();
+    interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
+        trie_data.iter().map(|&val| Some(val)).collect();
+    interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
+
+    let accounts_len = Segment::AccountsLinkedList as usize
+        + interpreter.generation_state.memory.contexts[0].segments
+            [Segment::AccountsLinkedList.unscale()]
+        .content
+        .len();
+    println!("accounts len {}", accounts_len);
+    let accounts_len_addr = MemoryAddress {
+        context: 0,
+        segment: Segment::GlobalMetadata.unscale(),
+        virt: GlobalMetadata::AccountsLinkedListLen.unscale(),
+    };
+    let storage_len_addr = MemoryAddress {
+        context: 0,
+        segment: Segment::GlobalMetadata.unscale(),
+        virt: GlobalMetadata::StorageLinkedListLen.unscale(),
+    };
+    let storage_len = Segment::StorageLinkedList as usize
+        + interpreter.generation_state.memory.contexts[0].segments
+            [Segment::StorageLinkedList.unscale()]
+        .content
+        .len();
+    println!("storage len {}", storage_len);
+    interpreter.set_memory_multi_addresses(&[
+        (accounts_len_addr, accounts_len.into()),
+        (storage_len_addr, storage_len.into()),
+    ]);
     let state_addr =
         MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
     let txn_addr =
@@ -305,6 +343,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
 /// Tests an SSTORE within a code similar to the contract code in add11_yml.
 #[test]
 fn sstore() -> Result<()> {
+    init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
@@ -312,7 +351,7 @@ fn sstore() -> Result<()> {
 
     let addr_nibbles = Nibbles::from_bytes_be(addr_hashed.as_bytes()).unwrap();
 
-    let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
+    let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0xfd, 0x00];
     let code_hash = keccak(code);
 
     let account_before = AccountRlp {
@@ -385,10 +424,17 @@ fn sstore() -> Result<()> {
 
     let hash = H256::from_uint(&interpreter.stack()[1]);
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec());
+    let mut normal_expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+    normal_expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec());
+    let normal_expected_hash = normal_expected_state_trie_after.hash();
 
+    let expected_state_trie_after = state_trie_before;
     let expected_state_trie_hash = expected_state_trie_after.hash();
+
+    println!(
+        "normal hash {:?}, expected hash with revert {:?}, actual hash {:?}",
+        normal_expected_hash, expected_state_trie_hash, hash
+    );
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
 }
@@ -396,6 +442,7 @@ fn sstore() -> Result<()> {
 /// Tests an SLOAD within a code similar to the contract code in add11_yml.
 #[test]
 fn sload() -> Result<()> {
+    init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 

@@ -151,6 +151,7 @@ impl<F: Field> Interpreter<F> {
 
     /// Initializes the interpreter state given `GenerationInputs`.
     pub(crate) fn initialize_interpreter_state(&mut self, inputs: GenerationInputs) {
+        println!("interpreter state init");
         let kernel_hash = KERNEL.code_hash;
         let kernel_code_len = KERNEL.code.len();
         let tries = &inputs.tries;
@@ -172,6 +173,32 @@ impl<F: Field> Interpreter<F> {
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
 
+        let accounts_len = Segment::AccountsLinkedList as usize
+            + self.generation_state.memory.contexts[0].segments
+                [Segment::AccountsLinkedList.unscale()]
+            .content
+            .len();
+        println!("accounts len {}", accounts_len);
+        let accounts_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::AccountsLinkedListLen.unscale(),
+        };
+        let storage_len_addr = MemoryAddress {
+            context: 0,
+            segment: Segment::GlobalMetadata.unscale(),
+            virt: GlobalMetadata::StorageLinkedListLen.unscale(),
+        };
+        let storage_len = Segment::StorageLinkedList as usize
+            + self.generation_state.memory.contexts[0].segments
+                [Segment::StorageLinkedList.unscale()]
+            .content
+            .len();
+        println!("storage len {}", storage_len);
+        self.set_memory_multi_addresses(&[
+            (accounts_len_addr, accounts_len.into()),
+            (storage_len_addr, storage_len.into()),
+        ]);
         // Initialize the `TrieData` segment.
         let preinit_trie_data_segment = MemorySegmentState {
             content: trie_data.iter().map(|&elt| Some(elt)).collect::<Vec<_>>(),
@@ -533,8 +560,16 @@ impl<F: Field> State<F> for Interpreter<F> {
         fill_op_flag(op, &mut row);
 
         self.fill_stack_fields(&mut row)?;
-
+        let pc = self.get_registers().program_counter;
         if registers.is_kernel {
+            println!(
+                "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
+                self.get_clock(),
+                self.get_context(),
+                KERNEL.offset_name(pc),
+                op,
+                self.get_generation_state().stack(),
+            );
             log_kernel_instruction(self, op);
         } else {
             self.log_debug(format!("User instruction: {:?}", op));
