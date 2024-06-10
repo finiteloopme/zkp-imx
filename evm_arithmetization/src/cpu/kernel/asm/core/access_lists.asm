@@ -10,7 +10,7 @@
 // which is written as [@U256_MAX, @SEGMENT_ACCESSED_ADDRESSES] in SEGMENT_ACCESSED_ADDRESSES
 // and as [@U256_MAX, _, _, @SEGMENT_ACCESSED_STORAGE_KEYS] in SEGMENT_ACCESSED_STORAGE_KEYS.
 // Initialize SEGMENT_ACCESSED_ADDRESSES
-global init_access_lists:
+global init_access_lists_original:
     // stack: (empty)
     // Store @U256_MAX at the beggining of the segment
     PUSH @SEGMENT_ACCESSED_ADDRESSES // ctx == virt == 0
@@ -45,6 +45,64 @@ global init_access_lists:
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
     JUMP
 
+// Methods for storage and addresses access lists. The acesses are tracked through a counter in 
+// linked_lists. We need to make sure that all accounts in the linked list have counter 0.
+global init_access_lists:
+    // stack: retdest
+    %init_accounts_list
+    %init_storage_list
+    JUMP
+
+%macro init_accounts_list:
+    // stack: retdest
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    DUP1 %add_const(2)
+    // stack: init_counter_ptr, init_ptr, retdest
+    MLOAD_GENERAL %assert_zero
+    // stack: init_ptr, retdest
+%%init_account_loop:
+    %add_const(3) MLOAD_GENERAL
+    // stack: next_ptr, retdest
+    DUP1 MLOAD_GENERAL
+    // stack: next_addr, next_ptr, retdest
+    PUSH @U256_MAX EQ %jumpi(%%end_init_accounts_loop)
+    // stack: next_ptr, retdest
+    DUP1 %add_const(2)
+    // stack: next_counter_ptr, next_ptr, retdest
+    PUSH 0 MSTORE_GENERAL
+    // stack: next_ptr, retdest
+    %jump(%%init_account_loop)
+%%end_init_accounts_loop:
+    // stack: final_ptr, retdest
+    POP
+    JUMP
+%endmacro
+
+%macro init_storage_list:
+    // stack: retdest
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    DUP1 %add_const(3)
+    // stack: init_counter_ptr, init_ptr, retdest
+    MLOAD_GENERAL %assert_zero
+    // stack: init_ptr, retdest
+%%init_storage_loop:
+    %add_const(4) MLOAD_GENERAL
+    // stack: next_ptr, retdest
+    DUP1 MLOAD_GENERAL
+    // stack: next_addr, next_ptr, retdest
+    PUSH @U256_MAX EQ %jumpi(end_init_storage_loop)
+    // stack: next_ptr, retdest
+    DUP1 %add_const(3)
+    // stack: next_counter_ptr, next_ptr, retdest
+    PUSH 0 MSTORE_GENERAL
+    // stack: next_ptr, retdest
+    %jump(init_account_loop)
+%%end_init_storage_loop:
+    // stack: final_ptr, retdest
+    POP
+    JUMP
+%endmacro
+
 %macro init_access_lists
     PUSH %%after
     %jump(init_access_lists)
@@ -76,10 +134,20 @@ global init_access_lists:
     // stack: 2*ptr
 %endmacro
 
+global insert_accessed_addresses:
+    // stack: addr, retdest
+    DUP1 %addr_to_state_key
+    // stack: addr_key, addr, retdest
+    %insert_account
+    // stack: account_found, cold_access, account_ptr, addr
+    %stack (account_found, addr, cold_access, account_ptr, retdest) -> (addr, retdest, cold_access)
+    %journal_add_account_loaded
+    // stack: retdest, cold_access
+    JUMP
 
 /// Inserts the address into the access list if it is not already present.
 /// Return 1 if the address was inserted, 0 if it was already present.
-global insert_accessed_addresses:
+global insert_accessed_addresses_original:
     // stack: addr, retdest
     PROVER_INPUT(access_lists::address_insert)
     // stack: pred_ptr/2, addr, retdest
@@ -167,7 +235,7 @@ insert_new_address:
 /// stores the address. It writes the link (pred)->(next_next)
 /// and (next) is marked as deleted by writting U256_MAX in its 
 /// next node pointer.
-global remove_accessed_addresses:
+global remove_accessed_addresses_original:
     // stack: addr, retdest
     PROVER_INPUT(access_lists::address_remove)
     // stack: pred_ptr/2, addr, retdest
@@ -197,9 +265,24 @@ global remove_accessed_addresses:
     POP
     JUMP
 
+global remove_accessed_addresses:
+    // stack: addr, retdest
+    // Find the account pointer in the linked list.
+    %read_accounts_linked_list
+    // stack: account_ptr, retdest
+    DUP1 %assert_nonzero
+    // Since we call the journal whether the access was warm or cold,
+    // we do not simpoly set the counter to 0, but rather decrement it.
+    %add_const(2)
+    // stack: counter_ptr, retdest
+    DUP1 MLOAD_GENERAL
+    // stack: counter, counter_ptr. retdest
+    %decrement MSTORE_GENERAL
+    // stack: retdest
+    JUMP
 
 %macro insert_accessed_storage_keys
-    %stack (addr, key) -> (addr, key, %%after)
+    %stack (addr, slot) -> (addr, slot, %%after)
     %jump(insert_accessed_storage_keys)
 %%after:
     // stack: cold_access, value_ptr
@@ -218,10 +301,23 @@ global remove_accessed_addresses:
     // stack: 2*ptr
 %endmacro
 
+global insert_accessed_storage_keys:
+    // stack: addr, slot, retdest
+    DUP2 %slot_to_storage_key
+    DUP2 %addr_to_state_key
+    // stack: addr_key, slot_key, addr, slot, retdest
+    %insert_slot
+    // stack: storage_found, cold_access, storage_ptr, addr, slot, retdest
+    %stack (storage_found, cold_access, storage_ptr, addr, slot, retdest) -> (addr, key, retdest, cold_access, storage_ptr)
+    %journal_add_storage_loaded
+    // stack: retdest, cold_access, storage_ptr
+    JUMP
+    
+
 /// Inserts the storage key into the access list if it is not already present.
 /// Return `1, value_ptr` if the storage key was inserted, `0, value_ptr` if it was already present.
 /// Callers to this function must ensure the original storage value is stored at `value_ptr`.
-global insert_accessed_storage_keys:
+global insert_accessed_storage_keys_original:
     // stack: addr, key, retdest
     PROVER_INPUT(access_lists::storage_insert)
     // stack: pred_ptr/4, addr, key, retdest
@@ -340,7 +436,7 @@ insert_storage_key:
 
 /// Remove the storage key and its value from the access list.
 /// Panics if the key is not in the list.
-global remove_accessed_storage_keys:
+global remove_accessed_storage_keys_original:
     // stack: addr, key, retdest
     PROVER_INPUT(access_lists::storage_remove)
     // stack: pred_ptr/4, addr, key, retdest
@@ -377,4 +473,17 @@ global remove_accessed_storage_keys:
     // stack: next_next_ptr, next_ptr_ptr, addr, key, retdest
     MSTORE_GENERAL
     %pop2
+    JUMP
+
+global remove_accessed_storage_keys:
+    // stack: addr, slot, retdest
+    %read_slot_linked_list
+    // stack: storage_found, cold_access, slot_ptr, retdest
+    %assert_nonzero POP
+    // stack: slot_ptr, retdest
+    %add_const(3) DUP1 MLOAD_GENERAL
+    // stack: slot_ctr, slot_ctr_ptr, retdest
+    DUP1 %assert_nonzero
+    %decrement MSTORE_GENERAL
+    // stack: retdest
     JUMP

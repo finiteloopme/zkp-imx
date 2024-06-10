@@ -67,12 +67,12 @@ global init_linked_lists:
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account)
 %%after:
-    // stack: cold_access
+    // stack: account_found, cold_access, account_ptr
 %endmacro
 
 %macro insert_account_no_return
     %insert_account
-    %pop2
+    %pop3
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/4, by 4
@@ -200,10 +200,7 @@ insert_new_account:
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
-    POP
-    PUSH 0
-    SWAP1
-    SWAP2
+    %stack (addr, payload_ptr, retdest) -> (retdest, 0, 0, payload_ptr)
     JUMP
 
 %macro search_account
@@ -311,12 +308,12 @@ global remove_account:
     %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
     %jump(insert_slot)
 %%after:
-    // stack: cold_access
+    // stack: is_found, cold_access, value_ptr
 %endmacro
 
 %macro insert_slot_no_return
     %insert_slot
-    %pop2
+    %pop3
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -489,10 +486,7 @@ next_node_ok:
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_storage_loaded!!!
-    %pop2
-    PUSH 0
-    SWAP1
-    SWAP2
+    %stack (addr, key, payload_ptr, retdest) -> (retdest, 0, 0, payload_ptr)
     JUMP
 
 /// Search the pair (addres, storage_key) in the storage the linked list.
@@ -626,5 +620,5 @@ global remove_slot:
     %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: storage_found, cold_access, value_ptr, slot_ptr
+    // stack: storage_found, cold_access, value_ptr
 %endmacro
