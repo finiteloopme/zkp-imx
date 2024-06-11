@@ -20,7 +20,7 @@ use starky::stark::Stark;
 
 use super::columns::{
     value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, COUNTER, FILTER,
-    FREQUENCIES, NUM_COLUMNS, RC_HIGH, SEGMENT_FIRST_CHANGE,
+    FREQUENCIES, NUM_COLUMNS, RC_HIGH, SEGMENT_FIRST_CHANGE, VIRTUAL_FIRST_CHANGE,
 };
 use crate::all_stark::EvmStarkFrame;
 use crate::generation::MemBeforeValues;
@@ -85,7 +85,7 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
     unpadded_len: usize,
 ) {
     let num_ops = trace_rows.len();
-    for idx in 0..unpadded_len - 1 {
+    for idx in 0..unpadded_len {
         let row = trace_rows[idx].as_slice();
         if row[FILTER] == F::ONE {
             let next_row = trace_rows[idx + 1].as_slice();
@@ -127,11 +127,11 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
 impl<F: RichField + Extendable<D>, const D: usize> MemoryAfterStark<F, D> {
     /// Generates the `COUNTER` and `FREQUENCIES` columns, given
     /// a trace in column-major form.
-    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>]) {
+    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>], unpadded_len: usize) {
         let height = trace_col_vecs[0].len();
         trace_col_vecs[COUNTER] = (0..height).map(|i| F::from_canonical_usize(i)).collect();
 
-        for i in 0..height {
+        for i in 0..unpadded_len {
             let rc_low = trace_col_vecs[RC_LOW][i].to_canonical_u64() as usize;
             let rc_high = trace_col_vecs[RC_HIGH][i].to_canonical_u64() as usize;
             trace_col_vecs[FREQUENCIES][rc_low] += F::ONE;
@@ -144,13 +144,22 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryAfterStark<F, D> {
     ) -> Vec<PolynomialValues<F>> {
         // Set the trace to the `propagated_values` provided by `MemoryStark`.
         // let mut rows = propagated_values;
-        let num_rows = propagated_values.len();
+        let mut num_rows = propagated_values.len();
         let mut rows: Vec<[F; NUM_COLUMNS]> = vec![[F::ZERO; NUM_COLUMNS]; num_rows];
 
         for (index, row) in propagated_values.into_iter().enumerate() {
             rows[index][0..12].copy_from_slice(&row);
         }
 
+        // If the memory after is non-empty, we add an extra row, necessary to validate
+        // the last first change rows. It's identical to the last row, but with
+        // the filter off and with incremented virt.
+        if num_rows > 0 {
+            rows.push(rows[num_rows - 1]);
+            rows[num_rows][FILTER] = F::ZERO;
+            rows[num_rows][ADDR_VIRTUAL] += F::ONE;
+            num_rows += 1;
+        }
         let num_rows_padded = max(1024, num_rows.next_power_of_two());
         for _ in num_rows..num_rows_padded {
             rows.push([F::ZERO; NUM_COLUMNS]);
@@ -160,9 +169,14 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryAfterStark<F, D> {
 
         let trace_row_vecs: Vec<_> = rows.into_iter().map(|row| row.to_vec()).collect();
 
-        let cols = transpose(&trace_row_vecs);
+        // Transpose to column-major form.
+        let mut trace_col_vecs = transpose(&trace_row_vecs);
 
-        cols.into_iter()
+        // A few final generation steps, which work better in column-major form.
+        Self::generate_trace_col_major(&mut trace_col_vecs, num_rows);
+
+        trace_col_vecs
+            .into_iter()
             .map(|column| PolynomialValues::new(column))
             .collect()
     }
@@ -185,9 +199,53 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryAfterSt
         P: PackedField<Scalar = FE>,
     {
         let local_values = vars.get_local_values();
+        let next_values = vars.get_next_values();
+
+        let one = P::ONES;
+
+        let addr_context = local_values[ADDR_CONTEXT];
+        let addr_segment = local_values[ADDR_SEGMENT];
+        let addr_virtual = local_values[ADDR_VIRTUAL];
+
+        let next_addr_context = next_values[ADDR_CONTEXT];
+        let next_addr_segment = next_values[ADDR_SEGMENT];
+        let next_addr_virtual = next_values[ADDR_VIRTUAL];
+
+        let context_first_change = local_values[CONTEXT_FIRST_CHANGE];
+        let segment_first_change = local_values[SEGMENT_FIRST_CHANGE];
+        let virtual_first_change = local_values[VIRTUAL_FIRST_CHANGE];
+
+        let not_context_first_change = one - context_first_change;
+        let not_segment_first_change = one - segment_first_change;
+        let not_virtual_first_change = one - virtual_first_change;
+
+        let address_changed = context_first_change + segment_first_change + virtual_first_change;
+        let address_unchanged = one - address_changed;
+
         // The filter must be binary.
         let filter = local_values[FILTER];
         yield_constr.constraint(filter * (filter - P::ONES));
+
+        // First change flags are binary.
+        yield_constr.constraint(context_first_change * not_context_first_change);
+        yield_constr.constraint(segment_first_change * not_segment_first_change);
+        yield_constr.constraint(virtual_first_change * not_virtual_first_change);
+
+        // No change before the column corresponding to the nonzero first_change
+        // flag.
+        yield_constr
+            .constraint_transition(segment_first_change * (next_addr_context - addr_context));
+        yield_constr
+            .constraint_transition(virtual_first_change * (next_addr_context - addr_context));
+        yield_constr
+            .constraint_transition(virtual_first_change * (next_addr_segment - addr_segment));
+        yield_constr.constraint_transition(address_unchanged * (next_addr_context - addr_context));
+        yield_constr.constraint_transition(address_unchanged * (next_addr_segment - addr_segment));
+        yield_constr.constraint_transition(address_unchanged * (next_addr_virtual - addr_virtual));
+
+        // If the filter is on, the address must change to ensure all tracked addresses
+        // are unique.
+        yield_constr.constraint_transition(filter * address_changed);
     }
 
     fn eval_ext_circuit(
