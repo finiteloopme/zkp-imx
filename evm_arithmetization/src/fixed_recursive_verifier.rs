@@ -81,7 +81,7 @@ where
     pub block: BlockCircuitData<F, C, D>,
     /// The two-to-one block aggregation circuit, which verifies two unrelated
     /// block proofs.
-    pub two_to_one_block: TwoToOneBlockIVCAggCircuitData<F, C, D>,
+    pub two_to_one_block_ivc: TwoToOneBlockIVCAggCircuitData<F, C, D>,
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
@@ -373,85 +373,97 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: BlockIVCAggChildTarget<D>,
-    rhs: BlockIVCAggChildTarget<D>,
-    agg_pv_hash: HashOutTarget,
+    prev: BlockIVCAggChildTarget<D>,
+    curr: BlockIVCAggChildTarget<D>,
+    ///// new structure
+    agg_proof: ProofWithPublicInputsTarget<D>,
+    block_proof: ProofWithPublicInputsTarget<D>,
+    has_prev: BoolTarget,
+    prev_pv: PublicValuesTarget,
+    curr_pv: PublicValuesTarget,
+    prev_pv_hash: HashOutTarget,
+    curr_pv_hash: HashOutTarget,
+    mix_pv_hash: HashOutTarget,
     // TODO: do I need this?
     cyclic_vk: VerifierCircuitTarget,
 }
 
-impl<F, C, const D: usize> TwoToOneBlockIVCAggCircuitData<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
-    fn to_buffer(
-        &self,
-        buffer: &mut Vec<u8>,
-        gate_serializer: &dyn GateSerializer<F, D>,
-        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
-    ) -> IoResult<()> {
-        buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
-        self.lhs.to_buffer(buffer);
-        self.rhs.to_buffer(buffer);
-        buffer.write_target_hash(&self.agg_pv_hash)?;
-        buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
-        Ok(())
-    }
+// impl<F, C, const D: usize> TwoToOneBlockAggCircuitData<F, C, D>
+// where
+//     F: RichField + Extendable<D>,
+//     C: GenericConfig<D, F = F>,
+// {
+//     fn to_buffer(
+//         &self,
+//         buffer: &mut Vec<u8>,
+//         gate_serializer: &dyn GateSerializer<F, D>,
+//         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+//     ) -> IoResult<()> {
+//         todo!();
+//         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
+//         self.prev.to_buffer(buffer);
+//         self.curr.to_buffer(buffer);
+//         buffer.write_target_hash(&self.agg_pv_hash)?;
+//         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
+//         Ok(())
+//     }
 
-    fn from_buffer(
-        buffer: &mut Buffer,
-        gate_serializer: &dyn GateSerializer<F, D>,
-        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
-    ) -> IoResult<Self> {
-        let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
-        let lhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
-        let rhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
-        let agg_pv_hash = buffer.read_target_hash()?;
-        let cyclic_vk = buffer.read_target_verifier_circuit()?;
-        Ok(Self {
-            circuit,
-            lhs,
-            rhs,
-            agg_pv_hash,
-            cyclic_vk,
-        })
-    }
+//     fn from_buffer(
+//         buffer: &mut Buffer,
+//         gate_serializer: &dyn GateSerializer<F, D>,
+//         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+//     ) -> IoResult<Self> {
+//         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
+//         let lhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
+//         let rhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
+//         let mix_pv_hash = buffer.read_target_hash()?;
+//         let cyclic_vk = buffer.read_target_verifier_circuit()?;
+//         todo!();
+//         Ok(Self {
+//             circuit,
+//             prev: lhs,
+//             curr: rhs,
+//             mix_pv_hash,
+//             cyclic_vk,
+//         })
+//     }
 
-}
+// }
 
 
 #[derive(Eq, PartialEq, Debug)]
 struct BlockIVCAggChildTarget<const D: usize>
 {
-    is_agg: BoolTarget,
+    has_prev: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
     block_proof: ProofWithPublicInputsTarget<D>,
+    pv: PublicValuesTarget,
+    pv1: PublicValuesTarget,
     pv_hash: HashOutTarget,
 }
 
 
 impl<const D: usize> BlockIVCAggChildTarget<D> {
-    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
-        buffer.write_target_bool(self.is_agg)?;
-        buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
-        buffer.write_target_proof_with_public_inputs(&self.block_proof)?;
-        buffer.write_target_hash(&self.pv_hash)?;
-        Ok(())
-    }
+    // fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+    //     buffer.write_target_bool(self.has_prev)?;
+    //     buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
+    //     buffer.write_target_proof_with_public_inputs(&self.block_proof)?;
+    //     buffer.write_target_hash(&self.pv_hash)?;
+    //     Ok(())
+    // }
 
-    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
-        let is_agg = buffer.read_target_bool()?;
-        let agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        let block_proof = buffer.read_target_proof_with_public_inputs()?;
-        let pv_hash = buffer.read_target_hash()?;
-        Ok(Self {
-            is_agg,
-            agg_proof,
-            block_proof,
-            pv_hash,
-        })
-    }
+    // fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+    //     let is_agg = buffer.read_target_bool()?;
+    //     let agg_proof = buffer.read_target_proof_with_public_inputs()?;
+    //     let block_proof = buffer.read_target_proof_with_public_inputs()?;
+    //     let pv_hash = buffer.read_target_hash()?;
+    //     Ok(Self {
+    //         has_prev: is_agg,
+    //         agg_proof,
+    //         block_proof,
+    //         pv_hash,
+    //     })
+    // }
 
     fn public_values<F, C>(&self, builder: &mut CircuitBuilder<F, D>) -> PublicValuesTarget
     where
@@ -460,7 +472,7 @@ impl<const D: usize> BlockIVCAggChildTarget<D> {
     {
         let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
         let block_pv = PublicValuesTarget::from_public_inputs(&self.block_proof.public_inputs);
-        PublicValuesTarget::select(builder, self.is_agg, agg_pv, block_pv)
+        PublicValuesTarget::select(builder, self.has_prev, agg_pv, block_pv)
     }
 }
 
@@ -646,11 +658,12 @@ where
         )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-        let two_to_one_block = TwoToOneBlockIVCAggCircuitData::from_buffer(
-            &mut buffer,
-            gate_serializer,
-            generator_serializer,
-        )?;
+        let two_to_one_block_ivc = todo!();
+        // TwoToOneBlockIVCAggCircuitData::from_buffer(
+        //     &mut buffer,
+        //     gate_serializer,
+        //     generator_serializer,
+        // )?;
 
         let by_table = match skip_tables {
             true => (0..NUM_TABLES)
@@ -687,7 +700,7 @@ where
             aggregation,
             two_to_one_aggregation,
             block,
-            two_to_one_block,
+            two_to_one_block_ivc,
             by_table,
         })
     }
@@ -785,7 +798,7 @@ where
             aggregation,
             two_to_one_aggregation,
             block,
-            two_to_one_block,
+            two_to_one_block_ivc: two_to_one_block,
             by_table,
         }
     }
@@ -1824,7 +1837,7 @@ where
         &self,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) -> anyhow::Result<()> {
-        self.two_to_one_block.circuit.verify(proof.clone())
+        self.two_to_one_block_ivc.circuit.verify(proof.clone())
     }
 
     fn create_two_to_one_agg_circuit(
@@ -1903,7 +1916,7 @@ where
         /// PublicInput: hash(pv0), hash(pv1), pv01_hash
         let prev_pv_hash = builder.add_virtual_hash_public_input();
         let curr_pv_hash = builder.add_virtual_hash_public_input();
-        let mix_hash = builder.add_virtual_hash_public_input();
+        let mix_pv_hash = builder.add_virtual_hash_public_input();
 
         /// PrivateInput: p0, p1, pv0, pv1
         let prev_proof = builder.add_virtual_proof_with_pis(&block.circuit.common);
@@ -1919,7 +1932,7 @@ where
 
         builder.connect_hashes(prev_pv_hash, curr_hash_circuit);
         builder.connect_hashes(curr_pv_hash, prev_hash_circuit);
-        builder.connect_hashes(mix_hash, mix_hash_circuit);
+        builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
 
         // TODO what happens here?
         let common = &block.circuit.common;
@@ -1948,25 +1961,18 @@ where
 
         let circuit = builder.build::<C>();
 
-        let lhs = BlockIVCAggChildTarget {
-            is_agg: check_prev,
-            agg_proof: todo!(),
-            block_proof: todo!(),
-            pv_hash: prev_pv_hash,
-        };
-
-        let rhs = BlockIVCAggChildTarget {
-            is_agg: check_prev,
-            agg_proof: todo!(),
-            block_proof: todo!(),
-            pv_hash: curr_pv_hash,
-        };
-
         TwoToOneBlockIVCAggCircuitData {
             circuit,
-            lhs,
-            rhs,
-            agg_pv_hash: mix_hash,
+            prev: todo!(),
+            curr: todo!(),
+            prev_pv: todo!(),
+            curr_pv: todo!(),
+            prev_pv_hash,
+            curr_pv_hash,
+            mix_pv_hash,
+            has_prev: check_prev,
+            agg_proof: prev_proof,
+            block_proof: curr_proof,
             cyclic_vk: block_verifier_data,
         }
     }
@@ -2000,51 +2006,71 @@ where
     /// are necessary during proof aggregation.
     pub fn prove_two_to_one_block_ivc(
         &self,
-        lhs: &ProofWithPublicInputs<F, C, D>,
-        lhs_is_agg: bool,
-        rhs: &ProofWithPublicInputs<F, C, D>,
-        rhs_is_agg: bool,
+        opt_prev_proof: Option<&ProofWithPublicInputs<F, C, D>>,
+        curr_proof: &ProofWithPublicInputs<F, C, D>,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut witness = PartialWitness::new();
 
-        witness.set_bool_target(self.two_to_one_block.lhs.is_agg, lhs_is_agg);
-        witness.set_bool_target(self.two_to_one_block.rhs.is_agg, rhs_is_agg);
+        let has_prev = opt_prev_proof.is_some();
+        witness.set_bool_target(self.two_to_one_block_ivc.prev.has_prev, has_prev);
 
-        // get hashes and combine.  lhs: `[0..4]`, rhs: `[4..8]`, mix: `[8..12]`.
-        let lhs_pv_hash = HashOut {
-            elements: lhs.public_inputs[8..12].try_into()?,
+        if let Some(prev_proof) = opt_prev_proof {
+
+            // get hashes and combine.  lhs: `[0..4]`, rhs: `[4..8]`, mix: `[8..12]`, cyclic_vk?, ???
+            let prev_pv_hash = HashOut {
+                elements: prev_proof.public_inputs[8..12].try_into()?,
+            };
+            witness.set_hash_target(self.two_to_one_block_ivc.prev.pv_hash, prev_pv_hash);
+
+            // select ..
+            witness
+                .set_proof_with_pis_target(&self.two_to_one_block_ivc.prev.agg_proof, prev_proof);
+        }
+        else
+        {
+            // when no prev proof
+            witness.set_proof_with_pis_target(
+                &self.block.parent_block_proof,
+                &cyclic_base_proof(
+                    &self.block.circuit.common,
+                    &self.block.circuit.verifier_only,
+                    todo!(),
+                ),
+            );
+
+
+        }
+
+        let curr_pv_hash = HashOut {
+            elements: curr_proof.public_inputs[8..12].try_into()?,
         };
-        let rhs_pv_hash = HashOut {
-            elements: rhs.public_inputs[8..12].try_into()?,
-        };
-        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+        let mix_pv_hash = C::InnerHasher::two_to_one(todo!(), curr_pv_hash);
 
         // set hashes
-        witness.set_hash_target(self.two_to_one_block.lhs.pv_hash, lhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block.rhs.pv_hash, rhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block.agg_pv_hash, mix_pv_hash);
+        witness.set_hash_target(self.two_to_one_block_ivc.curr.pv_hash, curr_pv_hash);
+        witness.set_hash_target(self.two_to_one_block_ivc.mix_pv_hash, mix_pv_hash);
 
         // set proofs
-        // select ..
         witness
-            .set_proof_with_pis_target(&self.two_to_one_block.lhs.agg_proof, lhs);
+            .set_proof_with_pis_target(&self.two_to_one_block_ivc.curr.agg_proof, curr_proof);
+
         witness
-            .set_proof_with_pis_target(&self.two_to_one_block.rhs.agg_proof, rhs);
+            .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only);
 
 
         // this is not used, but needs to be set to satisfy check in cyclic prover.
-        // set_public_value_targets(
-        //     &mut witness,
-        //     &self.aggregation.public_values,
-        //     &PublicValues::from_public_inputs(&lhs.public_inputs),
-        // )
-        // .map_err(|_| {
-        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        // })?;
+        set_public_value_targets(
+            &mut witness,
+            &self.two_to_one_block_ivc.curr_pv,
+            &PublicValues::from_public_inputs(&curr_proof.public_inputs),
+        )
+        .map_err(|_| {
+            anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        })?;
 
 
         // prove
-        let proof = self.two_to_one_block.circuit.prove(witness)?;
+        let proof = self.two_to_one_block_ivc.circuit.prove(witness)?;
         Ok(proof)
     }
 
@@ -2052,7 +2078,7 @@ where
         &self,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) -> anyhow::Result<()> {
-        self.two_to_one_block.circuit.verify(proof.clone())
+        self.two_to_one_block_ivc.circuit.verify(proof.clone())
         // Note that this does not enforce that the inner circuit uses the correct verification key.
         // This is not possible to check in this recursive circuit, since we do not know the
         // verification key until after we build it. Verifiers must separately call
@@ -2067,13 +2093,13 @@ where
     /// Follows the structure of [`create_block_circuit`]
     fn create_two_to_one_block_circuit_binop(
         block: &BlockCircuitData<F, C, D>,
-    ) -> TwoToOneBlockIVCAggCircuitData<F, C, D>
+    ) -> TwoToOneBlockBinopAggCircuitData<F, C, D>
     where
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
         C::Hasher: AlgebraicHasher<F>,
     {
-        todo!();
+        todo!("This is WIP");
         // Question: Do I need to adjust CommonCircuitData here like in [`create_block_circuit`]?
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
@@ -2133,21 +2159,21 @@ where
 
         let circuit = builder.build::<C>();
 
-        let lhs = BlockIVCAggChildTarget {
+        let lhs = BlockBinopAggChildTarget {
             is_agg: lhs_is_agg,
             agg_proof: todo!(),
             block_proof: todo!(),
             pv_hash: pv0_hash,
         };
 
-        let rhs = BlockIVCAggChildTarget {
+        let rhs = BlockBinopAggChildTarget {
             is_agg: rhs_is_agg,
             agg_proof: todo!(),
             block_proof: todo!(),
             pv_hash: pv1_hash,
         };
 
-        TwoToOneBlockIVCAggCircuitData {
+        TwoToOneBlockBinopAggCircuitData {
             circuit,
             lhs,
             rhs,

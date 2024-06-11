@@ -550,12 +550,14 @@ fn test_three_to_one_block_aggregation_ivc() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let proof01: ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2> =
-        all_circuits.prove_two_to_one_block_ivc(&bp[0], false, &bp[1], false)?;
-    all_circuits.verify_two_to_one_block_ivc(&proof01)?;
+    let aggproof0 = all_circuits.prove_two_to_one_block_ivc(None, &bp[0])?;
+    all_circuits.verify_two_to_one_block_ivc(&aggproof0)?;
 
-    let proof012 = all_circuits.prove_two_to_one_block_ivc(&proof01, true, &proof01, true)?;
-    all_circuits.verify_two_to_one_block_ivc(&proof012)?;
+    let aggproof01 = all_circuits.prove_two_to_one_block_ivc(Some(&aggproof0), &bp[1])?;
+    all_circuits.verify_two_to_one_block_ivc(&aggproof01)?;
+
+    let aggproof012 = all_circuits.prove_two_to_one_block_ivc(Some(&aggproof01), &bp[2])?;
+    all_circuits.verify_two_to_one_block_ivc(&aggproof012)?;
     assert!(false, "Hoooray!!, 3-block aggregation was verified");
     Ok(())
 }
