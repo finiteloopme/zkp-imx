@@ -1868,6 +1868,99 @@ where
         }
     }
 
+
+    /// Create a two-to-one block aggregation proof, combining two unrelated
+    /// block proofs into a single one.
+    ///
+    /// # Arguments
+    ///
+    /// - `proof0`: the first block proof including vectorized public inputs.
+    /// - `proof1`: the second block proof including vectorized public inputs.
+    /// - `lhs_proof`: the left child proof.
+    /// - `lhs_public_values`: the public values associated to the right child
+    ///   proof.
+    /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
+    ///   aggregation proof or
+    /// a regular transaction proof.
+    /// - `rhs_proof`: the right child proof.
+    /// - `rhs_public_values`: the public values associated to the right child
+    ///   proof.
+    ///
+    /// # Outputs
+    ///
+    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
+    ///
+    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
+    /// its [`PublicValues`]. Only the proof with public inputs is necessary
+    /// for a verifier to assert correctness of the computation,
+    /// but the public values are output for the prover convenience, as these
+    /// are necessary during proof aggregation.
+    pub fn prove_two_to_one_block_ivc(
+        &self,
+        lhs: &ProofWithPublicInputs<F, C, D>,
+        lhs_is_agg: bool,
+        rhs: &ProofWithPublicInputs<F, C, D>,
+        rhs_is_agg: bool,
+    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+        let mut witness = PartialWitness::new();
+
+        witness.set_bool_target(self.two_to_one_block.lhs.is_agg, lhs_is_agg);
+        witness.set_bool_target(self.two_to_one_block.rhs.is_agg, rhs_is_agg);
+
+        // get hashes and combine.  lhs: `[0..4]`, rhs: `[4..8]`, mix: `[8..12]`.
+        let lhs_pv_hash = HashOut {
+            elements: lhs.public_inputs[8..12].try_into()?,
+        };
+        let rhs_pv_hash = HashOut {
+            elements: rhs.public_inputs[8..12].try_into()?,
+        };
+        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+
+        // set hashes
+        witness.set_hash_target(self.two_to_one_block.lhs.pv_hash, lhs_pv_hash);
+        witness.set_hash_target(self.two_to_one_block.rhs.pv_hash, rhs_pv_hash);
+        witness.set_hash_target(self.two_to_one_block.agg_pv_hash, mix_pv_hash);
+
+        // set proofs
+        // select ..
+        witness
+            .set_proof_with_pis_target(&self.two_to_one_block.lhs.agg_proof, lhs);
+        witness
+            .set_proof_with_pis_target(&self.two_to_one_block.rhs.agg_proof, rhs);
+
+
+        // this is not used, but needs to be set to satisfy check in cyclic prover.
+        // set_public_value_targets(
+        //     &mut witness,
+        //     &self.aggregation.public_values,
+        //     &PublicValues::from_public_inputs(&lhs.public_inputs),
+        // )
+        // .map_err(|_| {
+        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        // })?;
+
+
+        // prove
+        let proof = self.two_to_one_block.circuit.prove(witness)?;
+        Ok(proof)
+    }
+
+    pub fn verify_two_to_one_block_ivc(
+        &self,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) -> anyhow::Result<()> {
+        self.two_to_one_block.circuit.verify(proof.clone())
+        // Note that this does not enforce that the inner circuit uses the correct verification key.
+        // This is not possible to check in this recursive circuit, since we do not know the
+        // verification key until after we build it. Verifiers must separately call
+        // `check_cyclic_proof_verifier_data`, in addition to verifying a recursive proof, to check
+        // that the verification key matches.
+
+        // todo
+        //let verifier_data = &self.block.circuit.verifier_data();
+        //check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
+    }
+
     /// Follows the structure of [`create_block_circuit`]
     fn create_two_to_one_block_circuit_binop(
         block: &BlockCircuitData<F, C, D>,
@@ -1959,100 +2052,7 @@ where
             cyclic_vk: block_verifier_data,
         }
     }
-
-    /// Create a two-to-one block aggregation proof, combining two unrelated
-    /// block proofs into a single one.
-    ///
-    /// # Arguments
-    ///
-    /// - `proof0`: the first block proof including vectorized public inputs.
-    /// - `proof1`: the second block proof including vectorized public inputs.
-    /// - `lhs_proof`: the left child proof.
-    /// - `lhs_public_values`: the public values associated to the right child
-    ///   proof.
-    /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
-    ///   aggregation proof or
-    /// a regular transaction proof.
-    /// - `rhs_proof`: the right child proof.
-    /// - `rhs_public_values`: the public values associated to the right child
-    ///   proof.
-    ///
-    /// # Outputs
-    ///
-    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
-    ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
-    /// its [`PublicValues`]. Only the proof with public inputs is necessary
-    /// for a verifier to assert correctness of the computation,
-    /// but the public values are output for the prover convenience, as these
-    /// are necessary during proof aggregation.
-    pub fn prove_two_to_one_block_einar(
-        &self,
-        lhs: &ProofWithPublicInputs<F, C, D>,
-        lhs_is_agg: bool,
-        rhs: &ProofWithPublicInputs<F, C, D>,
-        rhs_is_agg: bool,
-    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let mut witness = PartialWitness::new();
-
-        witness.set_bool_target(self.two_to_one_block.lhs.is_agg, lhs_is_agg);
-        witness.set_bool_target(self.two_to_one_block.rhs.is_agg, rhs_is_agg);
-
-        // get hashes and combine.  lhs: `[0..4]`, rhs: `[4..8]`, mix: `[8..12]`.
-        let lhs_pv_hash = HashOut {
-            elements: lhs.public_inputs[8..12].try_into()?,
-        };
-        let rhs_pv_hash = HashOut {
-            elements: rhs.public_inputs[8..12].try_into()?,
-        };
-        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
-
-        // set hashes
-        witness.set_hash_target(self.two_to_one_block.lhs.pv_hash, lhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block.rhs.pv_hash, rhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block.agg_pv_hash, mix_pv_hash);
-
-        // set proofs
-        // select ..
-        witness
-            .set_proof_with_pis_target(&self.two_to_one_block.lhs.agg_proof, lhs);
-        witness
-            .set_proof_with_pis_target(&self.two_to_one_block.rhs.agg_proof, rhs);
-
-
-        // this is not used, but needs to be set to satisfy check in cyclic prover.
-        // set_public_value_targets(
-        //     &mut witness,
-        //     &self.aggregation.public_values,
-        //     &PublicValues::from_public_inputs(&lhs.public_inputs),
-        // )
-        // .map_err(|_| {
-        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        // })?;
-
-
-        // prove
-        let proof = self.two_to_one_block.circuit.prove(witness)?;
-        Ok(proof)
-    }
-
-    pub fn verify_two_to_one_block_einar(
-        &self,
-        proof: &ProofWithPublicInputs<F, C, D>,
-    ) -> anyhow::Result<()> {
-        self.two_to_one_block.circuit.verify(proof.clone())
-        // Note that this does not enforce that the inner circuit uses the correct verification key.
-        // This is not possible to check in this recursive circuit, since we do not know the
-        // verification key until after we build it. Verifiers must separately call
-        // `check_cyclic_proof_verifier_data`, in addition to verifying a recursive proof, to check
-        // that the verification key matches.
-
-        // todo
-        //let verifier_data = &self.block.circuit.verifier_data();
-        //check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
-    }
 }
-
 /// A map between initial degree sizes and their associated shrinking recursion
 /// circuits.
 #[derive(Eq, PartialEq, Debug)]
