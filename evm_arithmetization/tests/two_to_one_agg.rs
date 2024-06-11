@@ -550,10 +550,11 @@ fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let proof01 = all_circuits.prove_two_to_one_block_einar(&bp[0], &bp[1])?;
+    let proof01: ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2> =
+        all_circuits.prove_two_to_one_block_einar(&bp[0], false, &bp[1], false)?;
     all_circuits.verify_two_to_one_block_einar(&proof01)?;
 
-    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, &proof01)?;
+    let proof012 = all_circuits.prove_two_to_one_block_einar(&proof01, true, &proof01, true)?;
     all_circuits.verify_two_to_one_block_einar(&proof012)?;
     assert!(false, "Hoooray!!, 3-block aggregation was verified");
     Ok(())

@@ -32,3 +32,26 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/0xPolygonZero/zk_evm"
 homepage = "https://github.com/0xPolygonZero/zk_evm"
 keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
+
+[profile.release]
+debug=true
+incremental=true
+debug-assertions=true
+lto=false
+overflow-checks=false
+
+[profile.test]
+opt-level=3
+debug=true
+incremental=true
+debug-assertions=true
+lto=false
+overflow-checks=false
+
+[profile.dev]
+opt-level=3
+debug=true
+incremental=true
+debug-assertions=true
+lto=false
+overflow-checks=false
