@@ -371,8 +371,8 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: BlockAggChildTarget<F, C, D>,
-    rhs: BlockAggChildTarget<F, C, D>,
+    lhs: BlockAggChildTarget<D>,
+    rhs: BlockAggChildTarget<D>,
     agg_pv_hash: HashOutTarget,
     // TODO: do I need this?
     cyclic_vk: VerifierCircuitTarget,
@@ -390,8 +390,8 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<()> {
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
-        self.lhs.to_buffer::<F,C,D>(buffer);
-        self.rhs.to_buffer::<F,C,D>(buffer);
+        self.lhs.to_buffer(buffer);
+        self.rhs.to_buffer(buffer);
         buffer.write_target_hash(&self.agg_pv_hash)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         Ok(())
@@ -403,8 +403,8 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Self> {
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
-        let lhs = BlockAggChildTarget::from_buffer::<F,C,D>(buffer)?;
-        let rhs = BlockAggChildTarget::from_buffer::<F,C,D>(buffer)?;
+        let lhs = BlockAggChildTarget::from_buffer(buffer)?;
+        let rhs = BlockAggChildTarget::from_buffer(buffer)?;
         let agg_pv_hash = buffer.read_target_hash()?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
@@ -420,7 +420,7 @@ where
 
 
 #[derive(Eq, PartialEq, Debug)]
-struct BlockAggChildTarget<F, C, const D: usize>
+struct BlockAggChildTarget<const D: usize>
 {
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
@@ -429,11 +429,7 @@ struct BlockAggChildTarget<F, C, const D: usize>
 }
 
 
-impl<F, C, const D: usize> BlockAggChildTarget<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
+impl<const D: usize> BlockAggChildTarget<D> {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_bool(self.is_agg)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
@@ -455,10 +451,11 @@ where
         })
     }
 
-    fn public_values(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-    ) -> PublicValuesTarget {
+    fn public_values<F, C>(&self, builder: &mut CircuitBuilder<F, D>) -> PublicValuesTarget
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+    {
         let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
         let block_pv = PublicValuesTarget::from_public_inputs(&self.block_proof.public_inputs);
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, block_pv)
@@ -679,7 +676,7 @@ where
         let aggregation = Self::create_aggregation_circuit(&root);
         let two_to_one_aggregation = Self::create_two_to_one_agg_circuit(&aggregation);
         let block = Self::create_block_circuit(&aggregation);
-        let two_to_one_block = Self::create_two_to_one_block_circuit_einar(&block);
+        let two_to_one_block = Self::create_two_to_one_block_circuit_ivc(&block);
         Self {
             root,
             aggregation,
@@ -1773,8 +1770,20 @@ where
         }
     }
 
-    /// This could follow a structure similar to [`connect_block_proof`]
-    fn create_two_to_one_block_circuit_einar(
+    /// This circuit follows the structure of [`create_block_circuit`]. This
+    /// circuit creates a IVC chain of unrelated blockproofs.  In contract, it
+    /// does not have any of the check between the blocks and their public
+    /// values, because they are not related.  However, it utilizes hashes of
+    /// public values to verify that the prover knew the corresponding public
+    /// value at prooftime.  This part can be confusing:  the public values are
+    /// kept hidden as part of the witness.  Not because they are not public and
+    /// not because they are not known to the verifier, but rather to keep the
+    /// actual (registered) public values constant size, which is a requirement
+    /// to do cyclic recursion.  Another thing, that can be confusing is that
+    /// `previous` here refers to the block, that came before and not to the
+    /// actual blockchain-order ancestor of the current block.  The latter is
+    /// not a concern in this circuit.
+    fn create_two_to_one_block_circuit_ivc(
         block: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockAggCircuitData<F, C, D>
     where
@@ -1782,6 +1791,95 @@ where
         C: GenericConfig<D, F = F>,
         C::Hasher: AlgebraicHasher<F>,
     {
+        // Question: Do I need to adjust CommonCircuitData here like in [`create_block_circuit`]?
+
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+
+        let check_prev = builder.add_virtual_bool_target_safe();
+
+        /// PublicInput: hash(pv0), hash(pv1), pv01_hash
+        let prev_pv_hash = builder.add_virtual_hash_public_input();
+        let curr_pv_hash = builder.add_virtual_hash_public_input();
+        let mix_hash = builder.add_virtual_hash_public_input();
+
+        /// PrivateInput: p0, p1, pv0, pv1
+        let prev_proof = builder.add_virtual_proof_with_pis(&block.circuit.common);
+        let curr_proof = builder.add_virtual_proof_with_pis(&block.circuit.common);
+
+        let prev_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(prev_proof.public_inputs.to_owned());
+        let curr_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(curr_proof.public_inputs.to_owned());
+
+        let mut mix_vec = vec![];
+        mix_vec.extend(&curr_hash_circuit.elements);
+        mix_vec.extend(&prev_hash_circuit.elements);
+        let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(mix_vec);
+
+        builder.connect_hashes(prev_pv_hash, curr_hash_circuit);
+        builder.connect_hashes(curr_pv_hash, prev_hash_circuit);
+        builder.connect_hashes(mix_hash, mix_hash_circuit);
+
+        // TODO what happens here?
+        let common = &block.circuit.common;
+        // aka block verifier key
+        let block_verifier_data =
+            builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
+
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
+
+        // Verify previous block proof unless it is a dummy (cyclic base case)
+        builder
+            .conditionally_verify_cyclic_proof_or_dummy::<C>(
+                check_prev, &prev_proof, &common
+            )
+            .expect("Failed to build cyclic recursion circuit for `prev`.");
+
+        // Always verify current agg proof
+        builder
+            .verify_proof::<C>(
+                &curr_proof, &cyclic_vk, &common);
+
+        // Question:  Is this necessary here: Why/why not? Pad to match the root circuit's degree.
+        // while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
+        //     builder.add_gate(NoopGate, vec![]);
+        // }
+
+        let circuit = builder.build::<C>();
+
+        let lhs = BlockAggChildTarget {
+            is_agg: check_prev,
+            agg_proof: todo!(),
+            block_proof: todo!(),
+            pv_hash: prev_pv_hash,
+        };
+
+        let rhs = BlockAggChildTarget {
+            is_agg: check_prev,
+            agg_proof: todo!(),
+            block_proof: todo!(),
+            pv_hash: curr_pv_hash,
+        };
+
+        TwoToOneBlockAggCircuitData {
+            circuit,
+            lhs,
+            rhs,
+            agg_pv_hash: mix_hash,
+            cyclic_vk: block_verifier_data,
+        }
+    }
+
+    /// Follows the structure of [`create_block_circuit`]
+    fn create_two_to_one_block_circuit_binop(
+        block: &BlockCircuitData<F, C, D>,
+    ) -> TwoToOneBlockAggCircuitData<F, C, D>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        todo!();
+        // Question: Do I need to adjust CommonCircuitData here like in [`create_block_circuit`]?
+
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
 
         let lhs_is_agg = builder.add_virtual_bool_target_safe();
@@ -1809,27 +1907,28 @@ where
         builder.connect_hashes(pv01_hash, pv01_hash_circuit);
 
         // TODO what happens here?
-        let common = block.circuit.common;
+        let common = &block.circuit.common;
         // aka block verifier key
         let block_verifier_data =
             builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
 
+        let _cyclic_vk = builder.add_verifier_data_public_inputs();
         //builder.verify_proof::<C>(&proof0, &block_verifier_data, &common);
         //builder.verify_proof::<C>(&proof1, &block_verifier_data, &common);
 
         // should select for if there should be a connection between
         // builder.select(a, x, y);
         // This must come after registering public inputs.
-        builder
-            .conditionally_verify_cyclic_proof::<C>(
-                lhs_is_agg, &proof0, &proof0, &block.cyclic_vk, &common
-            )
-            .expect("Failed to build cyclic recursion circuit for LHS.");
-        builder
-            .conditionally_verify_cyclic_proof::<C>(
-                rhs_is_agg, &proof1, &proof1, &block.cyclic_vk, &common
-            )
-            .expect("Failed to build cyclic recursion circuit for RHS.");
+        // builder
+        //     .conditionally_verify_cyclic_proof_or_dummy::<C>(
+        //         lhs_is_agg, &proof0, &proof0, &block.cyclic_vk, &common
+        //     )
+        //     .expect("Failed to build cyclic recursion circuit for LHS.");
+        // builder
+        //     .conditionally_verify_cyclic_proof::<C>(
+        //         rhs_is_agg, &proof1, &proof1, &block.cyclic_vk, &common
+        //     )
+        //     .expect("Failed to build cyclic recursion circuit for RHS.");
 
         // Todo:  Is this necessary here: Why/why not? Pad to match the root circuit's degree.
         // while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
@@ -1919,6 +2018,18 @@ where
             .set_proof_with_pis_target(&self.two_to_one_block.lhs.agg_proof, lhs);
         witness
             .set_proof_with_pis_target(&self.two_to_one_block.rhs.agg_proof, rhs);
+
+
+        // this is not used, but needs to be set to satisfy check in cyclic prover.
+        // set_public_value_targets(
+        //     &mut witness,
+        //     &self.aggregation.public_values,
+        //     &PublicValues::from_public_inputs(&lhs.public_inputs),
+        // )
+        // .map_err(|_| {
+        //     anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        // })?;
+
 
         // prove
         let proof = self.two_to_one_block.circuit.prove(witness)?;
