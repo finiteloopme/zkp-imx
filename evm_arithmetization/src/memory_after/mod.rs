@@ -4,3 +4,7 @@
 
 pub mod columns;
 pub mod memory_after_stark;
+
+/// The range-check value. Note that differences are range-checked against
+/// RANGE_CHECK^2.
+pub(crate) const RANGE_CHECK: usize = 1024;
