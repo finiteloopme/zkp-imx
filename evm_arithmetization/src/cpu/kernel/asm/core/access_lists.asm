@@ -53,7 +53,7 @@ global init_access_lists:
     %init_storage_list
     JUMP
 
-%macro init_accounts_list:
+%macro init_accounts_list
     // stack: retdest
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
     DUP1 %add_const(2)
@@ -78,7 +78,7 @@ global init_access_lists:
     JUMP
 %endmacro
 
-%macro init_storage_list:
+%macro init_storage_list
     // stack: retdest
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     DUP1 %add_const(3)
@@ -90,13 +90,13 @@ global init_access_lists:
     // stack: next_ptr, retdest
     DUP1 MLOAD_GENERAL
     // stack: next_addr, next_ptr, retdest
-    PUSH @U256_MAX EQ %jumpi(end_init_storage_loop)
+    PUSH @U256_MAX EQ %jumpi(%%end_init_storage_loop)
     // stack: next_ptr, retdest
     DUP1 %add_const(3)
     // stack: next_counter_ptr, next_ptr, retdest
     PUSH 0 MSTORE_GENERAL
     // stack: next_ptr, retdest
-    %jump(init_account_loop)
+    %jump(%%init_storage_loop)
 %%end_init_storage_loop:
     // stack: final_ptr, retdest
     POP
@@ -308,7 +308,7 @@ global insert_accessed_storage_keys:
     // stack: addr_key, slot_key, addr, slot, retdest
     %insert_slot
     // stack: storage_found, cold_access, storage_ptr, addr, slot, retdest
-    %stack (storage_found, cold_access, storage_ptr, addr, slot, retdest) -> (addr, key, retdest, cold_access, storage_ptr)
+    %stack (storage_found, cold_access, storage_ptr, addr, slot, retdest) -> (addr, slot, retdest, cold_access, storage_ptr)
     %journal_add_storage_loaded
     // stack: retdest, cold_access, storage_ptr
     JUMP
