@@ -236,12 +236,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryAfterSt
         let segment_first_change = local_values[SEGMENT_FIRST_CHANGE];
         let virtual_first_change = local_values[VIRTUAL_FIRST_CHANGE];
 
-        let not_context_first_change = one - context_first_change;
-        let not_segment_first_change = one - segment_first_change;
-        let not_virtual_first_change = one - virtual_first_change;
+        let not_context_first_change = context_first_change - one;
+        let not_segment_first_change = segment_first_change - one;
+        let not_virtual_first_change = virtual_first_change - one;
 
         let address_changed = context_first_change + segment_first_change + virtual_first_change;
-        let address_unchanged = one - address_changed;
+        let address_unchanged = address_changed - one;
 
         // The filter must be binary.
         let filter = local_values[FILTER];
@@ -269,7 +269,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryAfterSt
         // addresses are unique.
         yield_constr.constraint_transition(filter * address_unchanged);
 
-        // Validate range_check.
+        // Validate range-check.
         let rc_high = local_values[RC_HIGH];
         let rc_low = local_values[RC_LOW];
         let computed_range_check = context_first_change * (next_addr_context - addr_context - one)
@@ -296,11 +296,137 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryAfterSt
         yield_constr: &mut RecursiveConstraintConsumer<F, D>,
     ) {
         let local_values = vars.get_local_values();
+        let next_values = vars.get_next_values();
+
+        let one = builder.one_extension();
+
+        let addr_context = local_values[ADDR_CONTEXT];
+        let addr_segment = local_values[ADDR_SEGMENT];
+        let addr_virtual = local_values[ADDR_VIRTUAL];
+
+        let next_addr_context = next_values[ADDR_CONTEXT];
+        let next_addr_segment = next_values[ADDR_SEGMENT];
+        let next_addr_virtual = next_values[ADDR_VIRTUAL];
+
+        let context_first_change = local_values[CONTEXT_FIRST_CHANGE];
+        let segment_first_change = local_values[SEGMENT_FIRST_CHANGE];
+        let virtual_first_change = local_values[VIRTUAL_FIRST_CHANGE];
+
+        let not_context_first_change = builder.sub_extension(one, context_first_change);
+        let not_segment_first_change = builder.sub_extension(one, segment_first_change);
+        let not_virtual_first_change = builder.sub_extension(one, virtual_first_change);
+
+        let address_changed = builder.add_many_extension([
+            context_first_change,
+            segment_first_change,
+            virtual_first_change,
+        ]);
+        let address_unchanged = builder.sub_extension(address_changed, one);
+
         // The filter must be binary.
         let filter = local_values[FILTER];
-        let constr = builder.add_const_extension(filter, F::NEG_ONE);
-        let constr = builder.mul_extension(constr, filter);
-        yield_constr.constraint(builder, constr);
+        {
+            let constr = builder.mul_sub_extension(filter, filter, filter);
+            yield_constr.constraint(builder, constr);
+        }
+
+        // First change flags are binary.
+        {
+            let constr = builder.mul_sub_extension(
+                context_first_change,
+                context_first_change,
+                context_first_change,
+            );
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr = builder.mul_sub_extension(
+                segment_first_change,
+                segment_first_change,
+                segment_first_change,
+            );
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr = builder.mul_sub_extension(
+                virtual_first_change,
+                virtual_first_change,
+                virtual_first_change,
+            );
+            yield_constr.constraint(builder, constr);
+        }
+        {
+            let constr =
+                builder.mul_sub_extension(address_changed, address_changed, address_changed);
+            yield_constr.constraint(builder, constr);
+        }
+
+        let addr_context_diff = builder.sub_extension(next_addr_context, addr_context);
+        let addr_segment_diff = builder.sub_extension(next_addr_segment, addr_segment);
+        let addr_virt_diff = builder.sub_extension(next_addr_virtual, addr_virtual);
+
+        // No change before the column corresponding to the nonzero first_change
+        // flag. Only matters when filter is on.
+        {
+            let constr =
+                builder.mul_many_extension([filter, segment_first_change, addr_context_diff]);
+            yield_constr.constraint_transition(builder, constr);
+        }
+        {
+            let constr =
+                builder.mul_many_extension([filter, virtual_first_change, addr_context_diff]);
+            yield_constr.constraint_transition(builder, constr);
+        }
+        {
+            let constr =
+                builder.mul_many_extension([filter, virtual_first_change, addr_segment_diff]);
+            yield_constr.constraint_transition(builder, constr);
+        }
+
+        // If the filter is on, the address must change to ensure all tracked
+        // addresses are unique.
+        {
+            let constr = builder.mul_extension(filter, address_unchanged);
+            yield_constr.constraint_transition(builder, constr);
+        }
+
+        // Validate range-check.
+        let rc_high = local_values[RC_HIGH];
+        let rc_low = local_values[RC_LOW];
+        {
+            let context_rc = builder.sub_extension(addr_context_diff, one);
+            let context_rc = builder.mul_extension(context_first_change, context_rc);
+
+            let segment_rc = builder.sub_extension(addr_segment_diff, one);
+            let segment_rc = builder.mul_extension(segment_first_change, segment_rc);
+
+            let virt_rc = builder.sub_extension(addr_virt_diff, one);
+            let virt_rc = builder.mul_extension(virtual_first_change, virt_rc);
+
+            let range_check =
+                builder.constant_extension(F::Extension::from_canonical_usize(RANGE_CHECK));
+            let range_check = builder.mul_add_extension(range_check, rc_high, rc_low);
+
+            let constr = builder.add_many_extension([context_rc, segment_rc, virt_rc]);
+            let constr = builder.sub_extension(range_check, constr);
+            yield_constr.constraint_transition(builder, constr);
+        }
+
+        // Check the counter column.
+        let counter = local_values[COUNTER];
+        let next_counter = next_values[COUNTER];
+        let counter_diff = builder.sub_extension(next_counter, counter);
+        yield_constr.constraint_first_row(builder, counter);
+        {
+            let constr = builder.mul_sub_extension(counter_diff, counter_diff, counter_diff);
+            yield_constr.constraint_transition(builder, constr);
+        }
+        {
+            let range_max =
+                builder.constant_extension(F::Extension::from_canonical_usize(RANGE_CHECK - 1));
+            let constr = builder.sub_extension(counter, range_max);
+            yield_constr.constraint_last_row(builder, constr);
+        }
     }
 
     fn constraint_degree(&self) -> usize {
