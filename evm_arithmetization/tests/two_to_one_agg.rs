@@ -518,7 +518,7 @@ fn get_test_block_proof_cached(
 ///   (A,B) /
 ///     \  /
 ///   ((A,B),C)
-fn test_three_to_one_block_aggregation_cyclic() -> anyhow::Result<()> {
+fn test_three_to_one_block_aggregation_ivc() -> anyhow::Result<()> {
     init_logger();
     log::info!("Meta Stage 0:  Setup");
     let all_stark = AllStark::<F, D>::default();

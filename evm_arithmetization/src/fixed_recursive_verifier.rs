@@ -81,7 +81,7 @@ where
     pub block: BlockCircuitData<F, C, D>,
     /// The two-to-one block aggregation circuit, which verifies two unrelated
     /// block proofs.
-    pub two_to_one_block: TwoToOneBlockAggCircuitData<F, C, D>,
+    pub two_to_one_block: TwoToOneBlockIVCAggCircuitData<F, C, D>,
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
@@ -362,23 +362,25 @@ where
     }
 }
 
+
+
 /// Data for the two-to-one block circuit, which is used to generate a
 /// proof of two unrelated proofs.
 #[derive(Eq, PartialEq, Debug)]
-pub struct TwoToOneBlockAggCircuitData<F, C, const D: usize>
+pub struct TwoToOneBlockIVCAggCircuitData<F, C, const D: usize>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: BlockAggChildTarget<D>,
-    rhs: BlockAggChildTarget<D>,
+    lhs: BlockIVCAggChildTarget<D>,
+    rhs: BlockIVCAggChildTarget<D>,
     agg_pv_hash: HashOutTarget,
     // TODO: do I need this?
     cyclic_vk: VerifierCircuitTarget,
 }
 
-impl<F, C, const D: usize> TwoToOneBlockAggCircuitData<F, C, D>
+impl<F, C, const D: usize> TwoToOneBlockIVCAggCircuitData<F, C, D>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -403,8 +405,8 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Self> {
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
-        let lhs = BlockAggChildTarget::from_buffer(buffer)?;
-        let rhs = BlockAggChildTarget::from_buffer(buffer)?;
+        let lhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
+        let rhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
         let agg_pv_hash = buffer.read_target_hash()?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
@@ -420,7 +422,7 @@ where
 
 
 #[derive(Eq, PartialEq, Debug)]
-struct BlockAggChildTarget<const D: usize>
+struct BlockIVCAggChildTarget<const D: usize>
 {
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
@@ -429,7 +431,108 @@ struct BlockAggChildTarget<const D: usize>
 }
 
 
-impl<const D: usize> BlockAggChildTarget<D> {
+impl<const D: usize> BlockIVCAggChildTarget<D> {
+    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_bool(self.is_agg)?;
+        buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
+        buffer.write_target_proof_with_public_inputs(&self.block_proof)?;
+        buffer.write_target_hash(&self.pv_hash)?;
+        Ok(())
+    }
+
+    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let is_agg = buffer.read_target_bool()?;
+        let agg_proof = buffer.read_target_proof_with_public_inputs()?;
+        let block_proof = buffer.read_target_proof_with_public_inputs()?;
+        let pv_hash = buffer.read_target_hash()?;
+        Ok(Self {
+            is_agg,
+            agg_proof,
+            block_proof,
+            pv_hash,
+        })
+    }
+
+    fn public_values<F, C>(&self, builder: &mut CircuitBuilder<F, D>) -> PublicValuesTarget
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+    {
+        let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
+        let block_pv = PublicValuesTarget::from_public_inputs(&self.block_proof.public_inputs);
+        PublicValuesTarget::select(builder, self.is_agg, agg_pv, block_pv)
+    }
+}
+
+
+/// Data for the two-to-one block circuit, which is used to generate a
+/// proof of two unrelated proofs.
+#[derive(Eq, PartialEq, Debug)]
+pub struct TwoToOneBlockBinopAggCircuitData<F, C, const D: usize>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    pub circuit: CircuitData<F, C, D>,
+    lhs: BlockBinopAggChildTarget<D>,
+    rhs: BlockBinopAggChildTarget<D>,
+    agg_pv_hash: HashOutTarget,
+    // TODO: do I need this?
+    cyclic_vk: VerifierCircuitTarget,
+}
+
+impl<F, C, const D: usize> TwoToOneBlockBinopAggCircuitData<F, C, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    fn to_buffer(
+        &self,
+        buffer: &mut Vec<u8>,
+        gate_serializer: &dyn GateSerializer<F, D>,
+        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+    ) -> IoResult<()> {
+        buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
+        self.lhs.to_buffer(buffer);
+        self.rhs.to_buffer(buffer);
+        buffer.write_target_hash(&self.agg_pv_hash)?;
+        buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
+        Ok(())
+    }
+
+    fn from_buffer(
+        buffer: &mut Buffer,
+        gate_serializer: &dyn GateSerializer<F, D>,
+        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+    ) -> IoResult<Self> {
+        let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
+        let lhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
+        let rhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
+        let agg_pv_hash = buffer.read_target_hash()?;
+        let cyclic_vk = buffer.read_target_verifier_circuit()?;
+        Ok(Self {
+            circuit,
+            lhs,
+            rhs,
+            agg_pv_hash,
+            cyclic_vk,
+        })
+    }
+
+}
+
+
+#[derive(Eq, PartialEq, Debug)]
+struct BlockBinopAggChildTarget<const D: usize>
+{
+    is_agg: BoolTarget,
+    agg_proof: ProofWithPublicInputsTarget<D>,
+    block_proof: ProofWithPublicInputsTarget<D>,
+    pv_hash: HashOutTarget,
+}
+
+
+impl<const D: usize> BlockBinopAggChildTarget<D> {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_bool(self.is_agg)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
@@ -543,7 +646,7 @@ where
         )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-        let two_to_one_block = TwoToOneBlockAggCircuitData::from_buffer(
+        let two_to_one_block = TwoToOneBlockIVCAggCircuitData::from_buffer(
             &mut buffer,
             gate_serializer,
             generator_serializer,
@@ -1785,7 +1888,7 @@ where
     /// not a concern in this circuit.
     fn create_two_to_one_block_circuit_ivc(
         block: &BlockCircuitData<F, C, D>,
-    ) -> TwoToOneBlockAggCircuitData<F, C, D>
+    ) -> TwoToOneBlockIVCAggCircuitData<F, C, D>
     where
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
@@ -1845,21 +1948,21 @@ where
 
         let circuit = builder.build::<C>();
 
-        let lhs = BlockAggChildTarget {
+        let lhs = BlockIVCAggChildTarget {
             is_agg: check_prev,
             agg_proof: todo!(),
             block_proof: todo!(),
             pv_hash: prev_pv_hash,
         };
 
-        let rhs = BlockAggChildTarget {
+        let rhs = BlockIVCAggChildTarget {
             is_agg: check_prev,
             agg_proof: todo!(),
             block_proof: todo!(),
             pv_hash: curr_pv_hash,
         };
 
-        TwoToOneBlockAggCircuitData {
+        TwoToOneBlockIVCAggCircuitData {
             circuit,
             lhs,
             rhs,
@@ -1964,7 +2067,7 @@ where
     /// Follows the structure of [`create_block_circuit`]
     fn create_two_to_one_block_circuit_binop(
         block: &BlockCircuitData<F, C, D>,
-    ) -> TwoToOneBlockAggCircuitData<F, C, D>
+    ) -> TwoToOneBlockIVCAggCircuitData<F, C, D>
     where
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
@@ -2030,21 +2133,21 @@ where
 
         let circuit = builder.build::<C>();
 
-        let lhs = BlockAggChildTarget {
+        let lhs = BlockIVCAggChildTarget {
             is_agg: lhs_is_agg,
             agg_proof: todo!(),
             block_proof: todo!(),
             pv_hash: pv0_hash,
         };
 
-        let rhs = BlockAggChildTarget {
+        let rhs = BlockIVCAggChildTarget {
             is_agg: rhs_is_agg,
             agg_proof: todo!(),
             block_proof: todo!(),
             pv_hash: pv1_hash,
         };
 
-        TwoToOneBlockAggCircuitData {
+        TwoToOneBlockIVCAggCircuitData {
             circuit,
             lhs,
             rhs,
