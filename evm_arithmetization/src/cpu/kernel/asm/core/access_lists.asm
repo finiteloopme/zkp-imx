@@ -138,7 +138,7 @@ global insert_accessed_addresses:
     // stack: addr, retdest
     PUSH 0 DUP2 %addr_to_state_key
     // stack: addr_key, payload_ptr, addr, retdest
-    %insert_account
+    %insert_account_to_linked_list
     // stack: account_found, cold_access, account_ptr, addr
     %stack (account_found, cold_access, account_ptr, addr, retdest) -> (addr, retdest, cold_access)
     %journal_add_account_loaded
@@ -269,15 +269,19 @@ global remove_accessed_addresses:
     // stack: addr, retdest
     // Find the account pointer in the linked list.
     %read_accounts_linked_list
-    // stack: account_ptr, retdest
+    // stack: cold_access, account_ptr, retdest
+    POP
     DUP1 %assert_nonzero
     // Since we call the journal whether the access was warm or cold,
     // we do not simpoly set the counter to 0, but rather decrement it.
+    // We actually need to remove 2 to the counter because we just
+    // increased it when searching for the account.
     %add_const(2)
     // stack: counter_ptr, retdest
     DUP1 MLOAD_GENERAL
     // stack: counter, counter_ptr. retdest
-    %decrement MSTORE_GENERAL
+    %assert_gt_const(2)
+    %sub_const(2) MSTORE_GENERAL
     // stack: retdest
     JUMP
 
@@ -308,8 +312,8 @@ global insert_accessed_storage_keys:
     DUP3 %addr_to_state_key
     // stack: addr_key, slot_key, addr, slot, retdest
     %insert_slot
-    // stack: storage_found, cold_access, storage_ptr, addr, slot, retdest
-    %stack (storage_found, cold_access, storage_ptr, addr, slot, retdest) -> (addr, slot, retdest, cold_access, storage_ptr)
+    // stack: cold_access, storage_ptr, addr, slot, retdest
+    %stack (cold_access, storage_ptr, addr, slot, retdest) -> (addr, slot, retdest, cold_access, storage_ptr)
     %journal_add_storage_loaded
     // stack: retdest, cold_access, storage_ptr
     JUMP
@@ -479,12 +483,12 @@ global remove_accessed_storage_keys_original:
 global remove_accessed_storage_keys:
     // stack: addr, slot, retdest
     %read_slot_linked_list
-    // stack: storage_found, cold_access, slot_ptr, retdest
-    %assert_nonzero POP
+    // stack: slot_ptr, retdest
+    DUP1 %assert_nonzero
     // stack: slot_ptr, retdest
     %add_const(3) DUP1 MLOAD_GENERAL
     // stack: slot_ctr, slot_ctr_ptr, retdest
-    DUP1 %assert_nonzero
-    %decrement MSTORE_GENERAL
+    DUP1 %assert_gt_const(2)
+    %sub_const(2) MSTORE_GENERAL
     // stack: retdest
     JUMP

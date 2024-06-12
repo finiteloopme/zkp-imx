@@ -377,6 +377,10 @@ fn sstore() -> Result<()> {
     interpreter.push(0xdeadbeefu32.into());
     interpreter.run()?;
 
+    println!(
+        "initial storage linked lists {:?}",
+        interpreter.generation_state.get_storage_linked_list()
+    );
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
 
@@ -426,6 +430,16 @@ fn sstore() -> Result<()> {
 
     let expected_state_trie_hash = expected_state_trie_after.hash();
 
+    println!(
+        "final storage linked lists {:?}",
+        interpreter.generation_state.get_storage_linked_list()
+    );
+    println!(
+        "previous hash {:?} current hash {:?} normal hash {:?}",
+        state_trie_before.hash(),
+        hash,
+        expected_state_trie_hash
+    );
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
 }

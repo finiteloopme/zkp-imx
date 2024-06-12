@@ -8,7 +8,6 @@ global sload_current:
 
 
     %read_storage_linked_list
-    POP // the first element is `is_found`
     // stack: value_ptr, retdest
     DUP1 %jumpi(storage_key_exists)
 

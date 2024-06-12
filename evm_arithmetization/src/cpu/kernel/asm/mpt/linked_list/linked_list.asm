@@ -67,7 +67,7 @@ global init_linked_lists:
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account_to_linked_list)
 %%after:
-    // stack: account_found, cold_access, account_ptr
+    // stack: cold_access, account_ptr
 %endmacro
 
 %macro insert_account_to_linked_list_no_return
@@ -148,7 +148,7 @@ account_found:
     // stack: access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
     %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, 1, cold_access, orig_payload_ptr)
+    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 
 insert_new_account:
@@ -201,25 +201,24 @@ insert_new_account:
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
-    %stack (addr, payload_ptr, retdest) -> (retdest, 0, 0, payload_ptr)
+    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
     JUMP
 
 %macro search_account
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(search_account)
 %%after:
-    // stack: cold_access
+    // stack: cold_access, payload_ptr
 %endmacro
 
 %macro search_account_no_return
     %search_account
-    %pop3
+    %pop2
 %endmacro
 
 
 /// Search the account addr in the linked list.
-/// Returns (account_found, cold_access, payload_ptr) where:
-/// - `account_found` indicates whether the account was already in the linked list,
+/// Returns (cold_access, payload_ptr) where:
 /// - `cold_access` indicates whether the current access is a cold access (so whether the account was ever accessed before)
 /// - `payload_ptr` is a pointer to the account's payload.
 global search_account:
@@ -258,8 +257,8 @@ global search_account:
 account_not_found:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     %pop3
-     %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
-    // stack: retdest, account_found, cold_access, payload_ptr, retdest
+    %stack (payload_ptr, retdest) -> (retdest, 1, payload_ptr)
+    // stack: retdest, cold_access, payload_ptr, retdest
     JUMP
 
 %macro remove_account_from_linked_list
@@ -317,12 +316,12 @@ global remove_account:
     %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
     %jump(insert_slot)
 %%after:
-    // stack: is_found, cold_access, value_ptr
+    // stack: cold_access, value_ptr
 %endmacro
 
 %macro insert_slot_no_return
     %insert_slot
-    %pop3
+    %pop2
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -414,7 +413,7 @@ slot_found:
     // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
     %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, 1, cold_access, orig_payload_ptr)
+    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 insert_new_slot:
     // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
@@ -495,7 +494,7 @@ next_node_ok:
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_storage_loaded!!!
-    %stack (addr, key, payload_ptr, retdest) -> (retdest, 0, 0, payload_ptr)
+    %stack (addr, key, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
     JUMP
 
 /// Search the pair (addres, storage_key) in the storage the linked list.
@@ -552,7 +551,7 @@ global search_slot:
 slot_not_found:    
 // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %pop4
-    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
+    %stack (payload_ptr, retdest) -> (retdest, 1, payload_ptr)
     JUMP
 
 
@@ -611,8 +610,7 @@ global remove_slot:
     %addr_to_state_key
     %jump(search_account)
 %%after:
-    // stack: address_found, cold_access, account_ptr
-    SWAP1 POP
+    // stack: cold_access, account_ptr
 %endmacro
 
 %macro read_storage_linked_list
@@ -623,8 +621,8 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: storage_found, cold_access, value_ptr
-    SWAP1 POP
+    // stack: cold_access, value_ptr
+    POP
 %endmacro
 
 %macro read_slot_linked_list
@@ -634,7 +632,8 @@ global remove_slot:
     %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: storage_found, cold_access, value_ptr
+    // stack: cold_access, value_ptr
+    POP
 %endmacro
 
 %macro read_storage_linked_list_w_addr
@@ -645,6 +644,8 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
+    // stack: cold_access, payload_ptr
+    POP
 %endmacro
 
 %macro first_account
@@ -673,11 +674,3 @@ global remove_slot:
     // stack: next_node_ptr
 %endmacro
 
-%macro read_slot_linked_list
-    // stack: address, slot
-    %addr_to_state_key
-    SWAP1 %slot_to_storage_key
-    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
-    %jump(search_slot)
-%%after:
-%endmacro

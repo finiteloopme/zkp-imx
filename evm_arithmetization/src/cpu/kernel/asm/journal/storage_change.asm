@@ -12,8 +12,8 @@ global revert_storage_change_original:
     DUP3 ISZERO %jumpi(delete)
     // stack: address, slot, prev_value, retdest
     %read_slot_linked_list
-    // stack: storage_found, cold_access, value_ptr, prev_value, retdest
-    %assert_eq_const(1) POP
+    // stack: value_ptr, prev_value, retdest
+    DUP1 %assert_nonzero
     // stack: value_ptr, prev_value, retdest
     %mstore_trie_data
     JUMP
@@ -26,8 +26,8 @@ global revert_storage_change:
     DUP3 ISZERO %jumpi(delete)
     // stack: address, slot, prev_value, retdest
     %read_slot_linked_list
-    // stack: storage_found, cold_access, value_ptr, prev_value, retdest
-    %assert_eq_const(1) POP
+    // stack: value_ptr, prev_value, retdest
+    DUP1 %assert_nonzero
     // stack: value_ptr, prev_value, retdest
     %mstore_trie_data
     JUMP
