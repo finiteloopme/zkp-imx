@@ -6,7 +6,7 @@ global mpt_read_state_trie:
     // stack: address, retdest
 
     %read_accounts_linked_list
-    // stack: account_ptr
+    // stack: account_ptr, retdest
     SWAP1
     JUMP
 

@@ -611,6 +611,7 @@ global remove_slot:
     %jump(search_account)
 %%after:
     // stack: cold_access, account_ptr
+    POP
 %endmacro
 
 %macro read_storage_linked_list

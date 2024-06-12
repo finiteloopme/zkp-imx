@@ -139,8 +139,8 @@ global insert_accessed_addresses:
     PUSH 0 DUP2 %addr_to_state_key
     // stack: addr_key, payload_ptr, addr, retdest
     %insert_account_to_linked_list
-    // stack: account_found, cold_access, account_ptr, addr
-    %stack (account_found, cold_access, account_ptr, addr, retdest) -> (addr, retdest, cold_access)
+    // stack: cold_access, account_ptr, addr
+    %stack (cold_access, account_ptr, addr, retdest) -> (addr, retdest, cold_access)
     %journal_add_account_loaded
     // stack: retdest, cold_access
     JUMP
@@ -269,8 +269,7 @@ global remove_accessed_addresses:
     // stack: addr, retdest
     // Find the account pointer in the linked list.
     %read_accounts_linked_list
-    // stack: cold_access, account_ptr, retdest
-    POP
+    // stack: account_ptr, retdest
     DUP1 %assert_nonzero
     // Since we call the journal whether the access was warm or cold,
     // we do not simpoly set the counter to 0, but rather decrement it.
@@ -310,7 +309,7 @@ global insert_accessed_storage_keys:
     PUSH 0
     DUP3 %slot_to_storage_key
     DUP3 %addr_to_state_key
-    // stack: addr_key, slot_key, addr, slot, retdest
+    // stack: addr_key, slot_key, payload_ptr, addr, slot, retdest
     %insert_slot
     // stack: cold_access, storage_ptr, addr, slot, retdest
     %stack (cold_access, storage_ptr, addr, slot, retdest) -> (addr, slot, retdest, cold_access, storage_ptr)
