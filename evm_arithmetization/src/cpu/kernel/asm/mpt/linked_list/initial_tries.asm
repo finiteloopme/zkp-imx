@@ -1,7 +1,7 @@
 // Set the trie with root at `node_ptr` leaves 
 // payloads pointers to mem[payload_ptr_ptr] + step*i, for
-// for i =0..n_leaves. This is used to constraint that the
-// initial state and account tries payload pointers are exactly
+// for i =0..n_leaves. This is used to constraint the
+// initial state and account tries payload pointers such that they are exactly
 // those of the inital accounts and linked lists
 // Pre stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
 // Post stack: account_ptr_ptr, storage_ptr_ptr
@@ -29,7 +29,7 @@ skip:
 %%after:
 %endmacro
 
-%macro mpt_set_payload_no_return
+%macro set_initial_tries
     PUSH %%after
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     %add_const(7) // The first node is the special node, of size 5, so the first payload is at position 5 + 2.
@@ -38,7 +38,9 @@ skip:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %jump(mpt_set_payload)
 %%after:
-    %pop2
+    // We store account_ptr_ptr - 1, i.e. a pointer to the first node not in the initial state
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
+    POP
 %endmacro
 
 // Pre stack: node_ptr, account_ptr_ptr, retdest

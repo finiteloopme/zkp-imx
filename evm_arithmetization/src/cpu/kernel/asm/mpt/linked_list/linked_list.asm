@@ -18,7 +18,7 @@
 // The values at the respective positions are:
 // - 0: The account key
 // - 1: The key
-// - 2: A ptr to the payload (the account values)
+// - 2: A ptr to the payload (the stored value)
 // - 3: A counter indicating the number of times this slot have been accessed.
 // - 4: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
 global init_linked_lists:
@@ -63,16 +63,16 @@ global init_linked_lists:
 %%after:
 %endmacro
 
-%macro insert_account
+%macro insert_account_to_linked_list
     %stack (addr, ptr) -> (addr, ptr, %%after)
-    %jump(insert_account)
+    %jump(insert_account_to_linked_list)
 %%after:
     // stack: account_found, cold_access, account_ptr
 %endmacro
 
-%macro insert_account_no_return
-    %insert_account
-    %pop3
+%macro insert_account_to_linked_list_no_return
+    %insert_account_to_linked_list
+    %pop2
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/4, by 4
@@ -94,7 +94,7 @@ global init_linked_lists:
 /// Inserts the account addr and payload pointer into the linked list if it is not already present.
 /// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
-global insert_account:
+global insert_account_to_linked_list:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr, payload_ptr, retdest
@@ -258,11 +258,18 @@ global search_account:
 account_not_found:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     %pop3
-    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
+     %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
     // stack: retdest, account_found, cold_access, payload_ptr, retdest
     JUMP
 
-/// Remove the storage key and its value from the access list.
+%macro remove_account_from_linked_list
+    PUSH %%after
+    SWAP1
+    %jump(remove_account)
+%%after:
+%endmacro
+
+/// Remove the address and its value from the access list.
 /// Panics if the key is not in the list.
 global remove_account:
     // stack: addr, retdest
@@ -549,9 +556,14 @@ slot_not_found:
     JUMP
 
 
+%macro remove_slot
+    %stack (addr, key) -> (addr, key, %%after)
+    %jump(remove_slot)
+%%after:
+%endmacro
+
 /// Remove the storage key and its value from the list.
 /// Panics if the key is not in the list.
-
 global remove_slot:
     // stack: addr, key, retdest
     PROVER_INPUT(linked_list::remove_slot)
@@ -623,4 +635,49 @@ global remove_slot:
     %jump(search_slot)
 %%after:
     // stack: storage_found, cold_access, value_ptr
+%endmacro
+
+%macro read_storage_linked_list_w_addr
+    // stack: slot, address
+    %slot_to_storage_key
+    SWAP1
+    %addr_to_state_key
+    %stack (addr, key) -> (addr, key, 0, %%after)
+    %jump(search_slot)
+%%after:
+%endmacro
+
+%macro first_account
+    // stack: empty
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    %next_account
+%endmacro
+
+%macro next_account
+    // stack: node_ptr
+    %add_const(3)
+    MLOAD_GENERAL
+    // stack: next_node_ptr
+%endmacro
+
+%macro first_slot
+    // stack: empty
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    %next_slot
+%endmacro
+
+%macro next_slot
+    // stack: node_ptr
+    %add_const(4)
+    MLOAD_GENERAL
+    // stack: next_node_ptr
+%endmacro
+
+%macro read_slot_linked_list
+    // stack: address, slot
+    %addr_to_state_key
+    SWAP1 %slot_to_storage_key
+    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
+    %jump(search_slot)
+%%after:
 %endmacro
