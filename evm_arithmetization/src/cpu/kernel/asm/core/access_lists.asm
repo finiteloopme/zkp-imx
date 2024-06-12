@@ -136,11 +136,11 @@ global init_access_lists:
 
 global insert_accessed_addresses:
     // stack: addr, retdest
-    DUP1 %addr_to_state_key
-    // stack: addr_key, addr, retdest
+    PUSH 0 DUP2 %addr_to_state_key
+    // stack: addr_key, payload_ptr, addr, retdest
     %insert_account
     // stack: account_found, cold_access, account_ptr, addr
-    %stack (account_found, addr, cold_access, account_ptr, retdest) -> (addr, retdest, cold_access)
+    %stack (account_found, cold_access, account_ptr, addr, retdest) -> (addr, retdest, cold_access)
     %journal_add_account_loaded
     // stack: retdest, cold_access
     JUMP
@@ -303,8 +303,9 @@ global remove_accessed_addresses:
 
 global insert_accessed_storage_keys:
     // stack: addr, slot, retdest
-    DUP2 %slot_to_storage_key
-    DUP2 %addr_to_state_key
+    PUSH 0
+    DUP3 %slot_to_storage_key
+    DUP3 %addr_to_state_key
     // stack: addr_key, slot_key, addr, slot, retdest
     %insert_slot
     // stack: storage_found, cold_access, storage_ptr, addr, slot, retdest

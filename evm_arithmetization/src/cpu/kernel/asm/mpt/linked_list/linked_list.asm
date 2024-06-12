@@ -136,6 +136,7 @@ account_found:
     // stack: orig_payload_ptr, pred_ptr + 1, addr, payload_ptr, retdest
     SWAP1
     %increment
+    // stack: pred_ptr + 2, orig_payload_ptr, addr, payload_ptr, retdest
     DUP1
     MLOAD_GENERAL
     %increment
@@ -249,6 +250,7 @@ global search_account:
     DUP1
     %add_const(3)
     MLOAD_GENERAL
+    // stack: ptr, pred_ptr, addr, payload_ptr, retdest
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
     PANIC
