@@ -106,7 +106,7 @@ pub fn entrypoint(
     };
     use crate::trace_protocol::{
         BlockTraceTriePreImages, CombinedPreImages, SeparateStorageTriesPreImage,
-        SeparateTriePreImage, SeparateTriePreImages, TrieCompact, TrieDirect,
+        SeparateTriePreImage, SeparateTriePreImages,
     };
 
     let BlockTrace {
@@ -116,29 +116,22 @@ pub fn entrypoint(
     } = trace;
 
     let pre_images = match trie_pre_images {
-        BlockTraceTriePreImages::Separate(SeparateTriePreImages { state, storage }) => {
-            ProcessedBlockTracePreImages {
-                tries: PartialTriePreImages {
-                    state: match state {
-                        SeparateTriePreImage::Direct(TrieDirect(it)) => it,
-                    },
-                    storage: match storage {
-                        SeparateStorageTriesPreImage::MultipleTries(it) => it
-                            .into_iter()
-                            .map(|(k, v)| match v {
-                                SeparateTriePreImage::Direct(TrieDirect(v)) => (k, v),
-                            })
-                            .collect(),
-                    },
-                },
-                extra_code_hash_mappings: None,
-            }
-        }
-        BlockTraceTriePreImages::Combined(CombinedPreImages {
-            compact: TrieCompact(bytes),
-        }) => {
+        BlockTraceTriePreImages::Separate(SeparateTriePreImages {
+            state: SeparateTriePreImage::Direct(state),
+            storage: SeparateStorageTriesPreImage::MultipleTries(storage),
+        }) => ProcessedBlockTracePreImages {
+            tries: PartialTriePreImages {
+                state,
+                storage: storage
+                    .into_iter()
+                    .map(|(k, SeparateTriePreImage::Direct(v))| (k, v))
+                    .collect(),
+            },
+            extra_code_hash_mappings: None,
+        },
+        BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions =
-                wire::parse(&bytes).context("couldn't parse instruction from binary format")?;
+                wire::parse(&compact).context("couldn't parse instruction from binary format")?;
             let executions =
                 execution::execute(instructions).context("couldn't execute instructions")?;
             if !executions.len() == 1 {

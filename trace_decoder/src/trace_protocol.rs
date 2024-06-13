@@ -56,7 +56,7 @@ pub struct SeparateTriePreImages {
 pub enum SeparateTriePreImage {
     /// Storage or state trie format that can be processed as is, as it
     /// corresponds to the internal format.
-    Direct(TrieDirect),
+    Direct(HashedPartialTrie),
 }
 
 /// A trie pre-image where both state & storage are combined into one payload.
@@ -64,18 +64,9 @@ pub enum SeparateTriePreImage {
 #[serde(rename_all = "snake_case")]
 pub struct CombinedPreImages {
     /// Compact combined state and storage tries.
-    pub compact: TrieCompact,
+    #[serde(with = "crate::hex")]
+    pub compact: Vec<u8>,
 }
-
-/// Compact representation of a trie (will likely be very close to <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>)
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TrieCompact(#[serde(with = "crate::hex")] pub Vec<u8>);
-
-// TODO
-/// Trie format that is in exactly the same format of our internal trie format.
-/// This is the fastest format for us to processes.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TrieDirect(pub HashedPartialTrie);
 
 /// A trie pre-image where state and storage are separate.
 #[derive(Clone, Debug, Deserialize, Serialize)]
