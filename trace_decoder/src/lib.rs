@@ -134,21 +134,10 @@ pub mod utils;
 
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::H256;
-use processed_block_trace::ProcessingMeta;
 use trace_protocol::BlockTrace;
 use types::OtherBlockData;
 
 pub fn entrypoint(
-    trace: BlockTrace,
-    other: OtherBlockData,
-    resolve: impl Fn(H256) -> Vec<u8>,
-) -> anyhow::Result<Vec<GenerationInputs>> {
-    Ok(trace.into_txn_proof_gen_ir(&ProcessingMeta::new(|it| resolve(*it)), other)?)
-}
-
-/// The logic is [`BlockTrace::into_processed_block_trace`], with the new code
-/// path for wire witnesses transplanted in
-pub fn new_entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     resolve: impl Fn(H256) -> Vec<u8>,
