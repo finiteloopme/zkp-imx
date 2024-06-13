@@ -8,10 +8,7 @@ use mpt_trie::nibbles::Nibbles;
 
 use crate::compact::compact_prestate_processing::PartialTriePreImages;
 use crate::hash;
-use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
-};
+use crate::types::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
 use crate::{ContractCodeUsage, TxnInfo};
 
 #[derive(Debug)]
@@ -24,13 +21,13 @@ pub(crate) struct ProcessedBlockTrace {
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTracePreImages {
     pub tries: PartialTriePreImages,
-    pub extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
+    pub extra_code_hash_mappings: Option<HashMap<H256, Vec<u8>>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct ProcessedTxnInfo {
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
-    pub(crate) contract_code_accessed: HashMap<CodeHash, Vec<u8>>,
+    pub(crate) contract_code_accessed: HashMap<H256, Vec<u8>>,
     pub(crate) meta: TxnMetaState,
 }
 
@@ -43,11 +40,11 @@ pub struct CodeHashResolving<F> {
     /// Code hash mappings that we have constructed from parsing the block
     /// trace. If there are any txns that create contracts, then they will also
     /// get added here as we process the deltas.
-    pub extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
+    pub extra_code_hash_mappings: HashMap<H256, Vec<u8>>,
 }
 
-impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
-    fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
+impl<F: Fn(&H256) -> Vec<u8>> CodeHashResolving<F> {
+    fn resolve(&mut self, c_hash: &H256) -> Vec<u8> {
         match self.extra_code_hash_mappings.get(c_hash) {
             Some(code) => code.clone(),
             None => (self.client_code_hash_resolve_f)(c_hash),
@@ -60,10 +57,10 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 }
 
 impl TxnInfo {
-    pub(crate) fn into_processed_txn_info<F: CodeHashResolveFunc>(
+    pub(crate) fn into_processed_txn_info<F: Fn(&H256) -> Vec<u8>>(
         self,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        extra_state_accesses: &[HashedAccountAddr],
+        all_accounts_in_pre_image: &[(H256, AccountRlp)],
+        extra_state_accesses: &[H256],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -200,25 +197,24 @@ fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
     }
 }
 
-fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
+fn create_empty_code_access_map() -> HashMap<H256, Vec<u8>> {
     HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
-pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
-pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
+pub(crate) type StorageAccess = Vec<Nibbles>;
+pub(crate) type StorageWrite = Vec<(Nibbles, Vec<u8>)>;
 
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub(crate) state_accesses: Vec<HashedNodeAddr>,
-    pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
+    pub(crate) state_accesses: Vec<H256>,
+    pub(crate) state_writes: Vec<(H256, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(HashedAccountAddr, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(HashedAccountAddr, StorageWrite)>,
-    pub(crate) state_accounts_with_no_accesses_but_storage_tries:
-        HashMap<HashedAccountAddr, TrieRootHash>,
-    pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,
+    pub(crate) storage_accesses: Vec<(H256, StorageAccess)>,
+    pub(crate) storage_writes: Vec<(H256, StorageWrite)>,
+    pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    pub(crate) self_destructed_accounts: Vec<H256>,
 }
 
 #[derive(Debug)]
@@ -226,7 +222,7 @@ pub(crate) struct StateTrieWrites {
     pub(crate) balance: Option<U256>,
     pub(crate) nonce: Option<U256>,
     pub(crate) storage_trie_change: bool,
-    pub(crate) code_hash: Option<CodeHash>,
+    pub(crate) code_hash: Option<H256>,
 }
 
 #[derive(Debug, Default)]

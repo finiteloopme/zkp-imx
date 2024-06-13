@@ -64,14 +64,13 @@ mod compact {
     pub mod compact_prestate_processing {
         use std::collections::HashMap;
 
+        use ethereum_types::H256;
         use mpt_trie::partial_trie::HashedPartialTrie;
-
-        use crate::types::HashedAccountAddr;
 
         #[derive(Debug, Default)]
         pub(crate) struct PartialTriePreImages {
             pub state: HashedPartialTrie,
-            pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+            pub storage: HashMap<H256, HashedPartialTrie>,
         }
     }
 }
@@ -93,8 +92,6 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal, TrieRootHash};
-
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
 /// order to generate a proof.
@@ -110,7 +107,7 @@ pub struct BlockTrace {
 
     /// The code_db is a map of code hashes to the actual code. This is needed
     /// to execute transactions.
-    pub code_db: Option<HashMap<CodeHash, Vec<u8>>>,
+    pub code_db: Option<HashMap<H256, Vec<u8>>>,
 
     /// Traces and other info per transaction. The index of the transaction
     /// within the block corresponds to the slot in this vec.
@@ -160,7 +157,7 @@ pub struct CombinedPreImages {
 pub enum SeparateStorageTriesPreImage {
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
-    MultipleTries(HashMap<HashedAccountAddr, SeparateTriePreImage>),
+    MultipleTries(HashMap<H256, SeparateTriePreImage>),
 }
 
 /// Info specific to txns in the block.
@@ -221,12 +218,12 @@ pub struct TxnTrace {
     /// Note that if storage is written to, then it does not need to appear in
     /// this list (but is also fine if it does).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub storage_read: Option<Vec<StorageAddr>>,
+    pub storage_read: Option<Vec<H256>>,
 
     /// Account storage addresses that were mutated by the txn along with their
     /// new value.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub storage_written: Option<HashMap<StorageAddr, StorageVal>>,
+    pub storage_written: Option<HashMap<H256, U256>>,
 
     /// Contract code that this address accessed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -243,7 +240,7 @@ pub struct TxnTrace {
 #[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
     /// Contract was read.
-    Read(CodeHash),
+    Read(H256),
 
     /// Contract was created (and these are the bytes). Note that this new
     /// contract code will not appear in the [`BlockTrace`] map.
@@ -251,7 +248,7 @@ pub enum ContractCodeUsage {
 }
 
 impl ContractCodeUsage {
-    fn get_code_hash(&self) -> CodeHash {
+    fn get_code_hash(&self) -> H256 {
         match self {
             ContractCodeUsage::Read(hash) => *hash,
             ContractCodeUsage::Write(bytes) => hash(bytes),
@@ -265,7 +262,7 @@ pub struct OtherBlockData {
     /// Data that is specific to the block.
     pub b_data: BlockLevelData,
     /// State trie root hash at the checkpoint.
-    pub checkpoint_state_trie_root: TrieRootHash,
+    pub checkpoint_state_trie_root: H256,
 }
 
 /// Data that is specific to a block and is constant for all txns in a given
