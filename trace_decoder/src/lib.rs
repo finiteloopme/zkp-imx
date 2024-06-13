@@ -113,13 +113,10 @@
 #![feature(trait_alias)]
 #![feature(iter_array_chunks)]
 #![deny(rustdoc::broken_intra_doc_links)]
-#![deny(missing_debug_implementations)]
+// #![deny(missing_debug_implementations)]
 
 #[cfg(doc)]
-use {
-    trace_protocol::{BlockTrace, TxnInfo},
-    types::OtherBlockData,
-};
+use trace_protocol::TxnInfo;
 
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
@@ -148,4 +145,326 @@ pub fn entrypoint(
     resolve: impl Fn(H256) -> Vec<u8>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     Ok(trace.into_txn_proof_gen_ir(&ProcessingMeta::new(|it| resolve(*it)), other)?)
+}
+
+/// The logic is [`BlockTrace::into_processed_block_trace`], with the new code
+/// path for wire witnesses transplanted in
+pub fn new_entrypoint(
+    trace: BlockTrace,
+    other: OtherBlockData,
+    resolve: impl Fn(H256) -> Vec<u8>,
+) -> anyhow::Result<Vec<GenerationInputs>> {
+    use anyhow::{bail, Context as _};
+    use evm_arithmetization::generation::mpt::AccountRlp;
+    use mpt_trie::partial_trie::PartialTrie as _;
+    use type1witness::{execution, reshape, wire};
+
+    use crate::compact::compact_prestate_processing::PartialTriePreImages;
+    use crate::processed_block_trace::{
+        CodeHashResolving, ProcessedBlockTrace, ProcessedBlockTracePreImages,
+    };
+    use crate::trace_protocol::{
+        BlockTraceTriePreImages, CombinedPreImages, SeparateStorageTriesPreImage,
+        SeparateTriePreImage, SeparateTriePreImages, TrieCompact, TrieDirect, TrieUncompressed,
+    };
+
+    let BlockTrace {
+        trie_pre_images,
+        code_db,
+        txn_info,
+    } = trace;
+
+    let pre_images = match trie_pre_images {
+        BlockTraceTriePreImages::Separate(SeparateTriePreImages { state, storage }) => {
+            ProcessedBlockTracePreImages {
+                tries: PartialTriePreImages {
+                    state: match state {
+                        // TODO(0xaatif): remove this variant
+                        SeparateTriePreImage::Uncompressed(TrieUncompressed {}) => {
+                            bail!("unsupported format")
+                        }
+                        SeparateTriePreImage::Direct(TrieDirect(it)) => it,
+                    },
+                    storage: match storage {
+                        // TODO(0xaatif): remove this variant
+                        //                the old code just panics here
+                        SeparateStorageTriesPreImage::SingleTrie(TrieUncompressed {}) => {
+                            bail!("unsupported format")
+                        }
+                        SeparateStorageTriesPreImage::MultipleTries(it) => it
+                            .into_iter()
+                            .map(|(k, v)| match v {
+                                // TODO(0xaatif): remove this variant
+                                //                the old code just panics here
+                                SeparateTriePreImage::Uncompressed(TrieUncompressed {}) => {
+                                    bail!("unsupported format")
+                                }
+                                SeparateTriePreImage::Direct(TrieDirect(v)) => Ok((k, v)),
+                            })
+                            .collect::<Result<_, _>>()?,
+                    },
+                },
+                extra_code_hash_mappings: None,
+            }
+        }
+        BlockTraceTriePreImages::Combined(CombinedPreImages {
+            compact: TrieCompact(bytes),
+        }) => {
+            let instructions =
+                wire::parse(&bytes).context("couldn't parse instruction from binary format")?;
+            let executions =
+                execution::execute(instructions).context("couldn't execute instructions")?;
+            if !executions.len() == 1 {
+                bail!(
+                    "only a single execution is supported, not {}",
+                    executions.len()
+                )
+            };
+            let execution = executions.into_vec().remove(0);
+            let reshape::Reshape {
+                state,
+                code,
+                storage,
+            } = reshape::reshape(execution).context("couldn't reshape execution")?;
+            ProcessedBlockTracePreImages {
+                tries: PartialTriePreImages {
+                    state,
+                    storage: storage.into_iter().collect(),
+                },
+                extra_code_hash_mappings: match code.is_empty() {
+                    true => None,
+                    false => Some(
+                        code.into_iter()
+                            .map(|it| (crate::utils::hash(&it), it.into_vec()))
+                            .collect(),
+                    ),
+                },
+            }
+        }
+    };
+
+    let all_accounts_in_pre_images = pre_images
+        .tries
+        .state
+        .items()
+        .filter_map(|(addr, data)| {
+            data.as_val()
+                .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap()))
+        })
+        .collect::<Vec<_>>();
+
+    let code_db = {
+        let mut code_db = code_db.unwrap_or_default();
+        if let Some(code_mappings) = pre_images.extra_code_hash_mappings {
+            code_db.extend(code_mappings);
+        }
+        code_db
+    };
+
+    let mut code_hash_resolver = CodeHashResolving {
+        client_code_hash_resolve_f: |it: &ethereum_types::H256| resolve(*it),
+        extra_code_hash_mappings: code_db,
+    };
+
+    let last_tx_idx = txn_info.len().saturating_sub(1);
+
+    let txn_info = txn_info
+        .into_iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let extra_state_accesses = if last_tx_idx == i {
+                // If this is the last transaction, we mark the withdrawal addresses
+                // as accessed in the state trie.
+                other
+                    .b_data
+                    .withdrawals
+                    .iter()
+                    .map(|(addr, _)| crate::utils::hash(addr.as_bytes()))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+
+            t.into_processed_txn_info(
+                &all_accounts_in_pre_images,
+                &extra_state_accesses,
+                &mut code_hash_resolver,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    Ok(ProcessedBlockTrace {
+        tries: pre_images.tries,
+        txn_info,
+        withdrawals: other.b_data.withdrawals.clone(),
+    }
+    .into_txn_proof_gen_ir(other)?)
+}
+
+mod type1witness {
+    //! Based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
+    //! Deviations are commented with `BUG`.
+
+    /// Execution of [`Instruction`]s from the wire into a trie.
+    ///
+    /// Use of a stack machine is amenable to streaming off the wire.
+    pub(crate) mod execution;
+    pub(crate) mod reshape;
+    /// Simple nibble representation.
+    mod u4;
+    /// Parser combinators for the binary "wire" format.
+    ///
+    /// Use of [`winnow`] is amenable to streaming off the wire.
+    pub(crate) mod wire;
+
+    fn nibbles2nibbles(ours: Vec<u4::U4>) -> mpt_trie::nibbles::Nibbles {
+        let mut theirs = mpt_trie::nibbles::Nibbles::default();
+        for it in ours {
+            theirs.push_nibble_back(it as u8)
+        }
+        theirs
+    }
+
+    #[test]
+    fn test() {
+        use insta::assert_debug_snapshot;
+        use mpt_trie::{partial_trie::PartialTrie as _, trie_ops::ValOrHash};
+        use pretty_assertions::assert_eq;
+
+        #[derive(serde::Deserialize)]
+        struct Case {
+            #[serde(with = "hex")]
+            pub bytes: Vec<u8>,
+            #[serde(with = "hex", default)]
+            pub expected_state_root: Vec<u8>,
+        }
+
+        for (ix, case) in
+            serde_json::from_str::<Vec<Case>>(include_str!("type1witness/test_cases.json"))
+                .unwrap()
+                .into_iter()
+                .enumerate()
+        {
+            println!("case {}", ix);
+            let instructions = wire::parse(&case.bytes).unwrap();
+            assert_debug_snapshot!(instructions);
+
+            let executions = execution::execute(instructions).unwrap();
+            assert_debug_snapshot!(executions);
+            assert_eq!(executions.len(), 1);
+            let execution = executions.first().clone();
+
+            let reshaped = reshape::reshape(execution).unwrap();
+            assert_debug_snapshot!(reshaped);
+            assert_eq!(
+                reshaped.state.hash(),
+                ethereum_types::H256::from_slice(&case.expected_state_root)
+            );
+
+            for (k, v) in reshaped.state.items() {
+                if let ValOrHash::Val(bytes) = v {
+                    let storage_root =
+                        rlp::decode::<evm_arithmetization::generation::mpt::AccountRlp>(&bytes)
+                            .unwrap()
+                            .storage_root;
+                    if storage_root != crate::utils::hash(&[]) {
+                        assert!(reshaped
+                            .storage
+                            .contains_key(&ethereum_types::H256::from_slice(&k.bytes_be())))
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(never)]
+    fn instruction2instruction(
+        ours: wire::Instruction,
+    ) -> crate::compact::compact_prestate_processing::Instruction {
+        use wire::Instruction;
+
+        use crate::compact::compact_prestate_processing::Instruction as Theirs;
+        match ours {
+            Instruction::Leaf { key, value } => {
+                Theirs::Leaf(nibbles2nibbles(key.into()), value.into())
+            }
+            Instruction::Extension { key } => Theirs::Extension(nibbles2nibbles(key.into())),
+            Instruction::Branch { mask } => Theirs::Branch(mask.try_into().unwrap()),
+            Instruction::Hash { raw_hash } => Theirs::Hash(raw_hash.into()),
+            Instruction::Code { raw_code } => Theirs::Code(raw_code.into()),
+            Instruction::AccountLeaf {
+                key,
+                nonce,
+                balance,
+                has_code,
+                has_storage,
+            } => Theirs::AccountLeaf(
+                nibbles2nibbles(key.into()),
+                nonce.unwrap_or_default().into(),
+                balance.unwrap_or_default(),
+                has_code,
+                has_storage,
+            ),
+            Instruction::EmptyRoot => Theirs::EmptyRoot,
+            Instruction::NewTrie => todo!(),
+        }
+    }
+
+    #[cfg(never)]
+    fn execution2node(
+        ours: execution::Execution,
+    ) -> crate::compact::compact_prestate_processing::NodeEntry {
+        use execution::*;
+        node2node(match ours {
+            Execution::Leaf(it) => Node::Leaf(it),
+            Execution::Extension(it) => Node::Extension(it),
+            Execution::Branch(it) => Node::Branch(it),
+            Execution::Empty => Node::Empty,
+        })
+    }
+
+    #[cfg(never)]
+    fn node2node(ours: execution::Node) -> crate::compact::compact_prestate_processing::NodeEntry {
+        use either::Either;
+        use execution::*;
+
+        use crate::compact::compact_prestate_processing::{
+            AccountNodeCode, AccountNodeData, LeafNodeData, NodeEntry as Theirs, ValueNodeData,
+        };
+        match ours {
+            Node::Hash(Hash { raw_hash }) => Theirs::Hash(raw_hash.into()),
+            Node::Leaf(Leaf { key, value }) => Theirs::Leaf(
+                nibbles2nibbles(key.into()),
+                match value {
+                    Either::Left(Value { raw_value }) => {
+                        LeafNodeData::Value(ValueNodeData(raw_value.into()))
+                    }
+                    Either::Right(Account {
+                        nonce,
+                        balance,
+                        storage,
+                        code,
+                    }) => LeafNodeData::Account(AccountNodeData {
+                        nonce: nonce.into(),
+                        balance,
+                        storage_trie: storage.map(|it| reshape::node2trie(*it).unwrap()),
+                        account_node_code: code.map(|it| match it {
+                            Either::Left(Hash { raw_hash }) => {
+                                AccountNodeCode::HashNode(raw_hash.into())
+                            }
+                            Either::Right(Code { code }) => AccountNodeCode::CodeNode(code.into()),
+                        }),
+                    }),
+                },
+            ),
+            Node::Extension(Extension { key, child }) => {
+                Theirs::Extension(nibbles2nibbles(key.into()), Box::new(node2node(*child)))
+            }
+            Node::Branch(Branch { children }) => {
+                Theirs::Branch(children.map(|it| it.map(|it| Box::new(node2node(*it)))))
+            }
+            Node::Code(Code { code }) => Theirs::Code(code.into()),
+            Node::Empty => Theirs::Empty,
+        }
+    }
 }
