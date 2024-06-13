@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 
 /// This contains all the existing memory segments. The values in the enum are
@@ -5,7 +7,7 @@ pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 /// segment / virtual) bundling in the kernel.
 #[allow(dead_code)]
 #[allow(clippy::enum_clike_unportable_variant)]
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub(crate) enum Segment {
     /// Contains EVM bytecode.
     // The Kernel has optimizations relying on the Code segment being 0.
@@ -77,10 +79,13 @@ pub(crate) enum Segment {
     AccountsLinkedList = 34 << SEGMENT_SCALING_FACTOR,
     /// List of storage slots of all the accounts in state trie,
     StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
+    /// Segment storing the registers before/after the current execution,
+    /// as well as `exit_kernel` for the `registers_before`, in that order.
+    RegistersStates = 36 << SEGMENT_SCALING_FACTOR,
 }
 
 impl Segment {
-    pub(crate) const COUNT: usize = 36;
+    pub(crate) const COUNT: usize = 37;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -125,6 +130,7 @@ impl Segment {
             Self::BlockHashes,
             Self::AccountsLinkedList,
             Self::StorageLinkedList,
+            Self::RegistersStates,
         ]
     }
 
@@ -167,6 +173,7 @@ impl Segment {
             Segment::BlockHashes => "SEGMENT_BLOCK_HASHES",
             Segment::AccountsLinkedList => "SEGMENT_ACCOUNTS_LINKED_LIST",
             Segment::StorageLinkedList => "SEGMENT_STORAGE_LINKED_LIST",
+            Segment::RegistersStates => "SEGMENT_REGISTERS_STATES",
         }
     }
 
@@ -208,6 +215,7 @@ impl Segment {
             Segment::BlockHashes => 256,
             Segment::AccountsLinkedList => 256,
             Segment::StorageLinkedList => 256,
+            Segment::RegistersStates => 256,
         }
     }
 }
