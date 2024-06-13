@@ -6,6 +6,7 @@
 use std::cmp::max;
 use std::marker::PhantomData;
 
+use ethereum_types::U256;
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -23,6 +24,7 @@ use super::columns::{value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, FILTE
 use crate::all_stark::EvmStarkFrame;
 use crate::generation::MemBeforeValues;
 use crate::memory::VALUE_LIMBS;
+use crate::witness::memory::MemoryAddress;
 
 /// CTL filter to send a row to Memory.
 /// Is 1 if filter is 1.
@@ -46,7 +48,7 @@ pub(crate) fn ctl_filter_before_to_after<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(
             Column::linear_combination([(FILTER, two_inv)]),
-            Column::linear_combination_with_constant([(FILTER, -F::ONE)], F::ONE),
+            Column::linear_combination_with_constant([(FILTER, F::ONE)], -F::ONE),
         )],
         vec![Column::zero()],
     )
@@ -75,18 +77,18 @@ pub(crate) fn ctl_data<F: Field>() -> Vec<Column<F>> {
 
 /// Convert `mem_before_values` to a vector of memory trace rows
 pub(crate) fn mem_before_values_to_rows<F: Field>(
-    mem_before_values: &MemBeforeValues,
+    mem_before_values: Vec<(bool, MemoryAddress, U256)>,
 ) -> Vec<Vec<F>> {
     mem_before_values
         .iter()
-        .map(|mem_data| {
+        .map(|&(flag, addr, value)| {
             let mut row = vec![F::ZERO; NUM_COLUMNS];
-            row[FILTER] = F::ONE;
-            row[ADDR_CONTEXT] = F::from_canonical_usize(mem_data.0.context);
-            row[ADDR_SEGMENT] = F::from_canonical_usize(mem_data.0.segment);
-            row[ADDR_VIRTUAL] = F::from_canonical_usize(mem_data.0.virt);
+            row[FILTER] = if flag { F::ONE } else { -F::ONE };
+            row[ADDR_CONTEXT] = F::from_canonical_usize(addr.context);
+            row[ADDR_SEGMENT] = F::from_canonical_usize(addr.segment);
+            row[ADDR_VIRTUAL] = F::from_canonical_usize(addr.virt);
             for j in 0..VALUE_LIMBS {
-                row[j + 4] = F::from_canonical_u32((mem_data.1 >> (j * 32)).low_u32());
+                row[j + 4] = F::from_canonical_u32((value >> (j * 32)).low_u32());
             }
             row
         })
@@ -139,9 +141,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryBeforeS
         P: PackedField<Scalar = FE>,
     {
         let local_values = vars.get_local_values();
-        // The filter must be binary.
+        // The filter must be -1, 0 or 1.
         let filter = local_values[FILTER];
-        yield_constr.constraint(filter * (filter - P::ONES));
+        yield_constr.constraint(filter * (filter + P::ONES) * (filter - P::ONES));
     }
 
     fn eval_ext_circuit(

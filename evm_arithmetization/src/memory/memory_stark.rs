@@ -1,5 +1,6 @@
 use core::marker::PhantomData;
 use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 
 use ethereum_types::U256;
 use itertools::Itertools;
@@ -385,16 +386,30 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         mem_before_values: &[(MemoryAddress, U256)],
         stale_contexts: Vec<usize>,
         timing: &mut TimingTree,
-    ) -> (Vec<PolynomialValues<F>>, Vec<Vec<F>>, usize) {
-        // First, push `mem_before` operations.
+    ) -> (
+        Vec<PolynomialValues<F>>,
+        Vec<(bool, MemoryAddress, U256)>,
+        Vec<Vec<F>>,
+        usize,
+    ) {
+        let touched_addresses: HashSet<_> = memory_ops.iter().map(|op| op.address).collect();
+        let mut mem_before_with_flag: Vec<(bool, MemoryAddress, U256)> =
+            Vec::with_capacity(mem_before_values.len());
+
+        // Push `mem_before` operations if they are touched during the execution.
         for &(address, value) in mem_before_values {
-            memory_ops.push(MemoryOp {
-                filter: true,
-                timestamp: 0,
-                address,
-                kind: crate::witness::memory::MemoryOpKind::Write,
-                value,
-            });
+            if touched_addresses.contains(&address) {
+                memory_ops.push(MemoryOp {
+                    filter: true,
+                    timestamp: 0,
+                    address,
+                    kind: crate::witness::memory::MemoryOpKind::Write,
+                    value,
+                });
+                mem_before_with_flag.push((true, address, value));
+            } else {
+                mem_before_with_flag.push((false, address, value));
+            }
         }
         // Generate most of the trace in row-major form.
         let (mut trace_rows, unpadded_length) = timed!(
@@ -430,6 +445,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                 .into_iter()
                 .map(|column| PolynomialValues::new(column))
                 .collect(),
+            mem_before_with_flag,
             mem_after_values,
             unpadded_length,
         )

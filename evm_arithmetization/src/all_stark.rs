@@ -353,8 +353,8 @@ fn ctl_mem_before<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(all_lookers, mem_before_looked)
 }
 
-/// `CrossTableLookup` for `MemAfter` table to connect it with the `Memory`
-/// module.
+/// `CrossTableLookup` for `MemAfter` table to connect it with the `MemBefore`
+/// and `Memory` modules.
 fn ctl_mem_after<F: Field>() -> CrossTableLookup<F> {
     let mem_before_looking = TableWithColumns::new(
         *Table::MemBefore,

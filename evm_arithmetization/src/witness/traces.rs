@@ -176,7 +176,7 @@ impl<T: Copy> Traces<T> {
                 .logic_stark
                 .generate_trace(logic_ops, cap_elements, timing)
         );
-        let (memory_trace, final_values, unpadded_memory_length) = timed!(
+        let (memory_trace, mem_before_with_flag, final_values, unpadded_memory_length) = timed!(
             timing,
             "generate memory trace",
             all_stark.memory_stark.generate_trace(
@@ -193,7 +193,7 @@ impl<T: Copy> Traces<T> {
             "generate mem_before trace",
             all_stark
                 .mem_before_stark
-                .generate_trace(mem_before_values_to_rows(mem_before_values))
+                .generate_trace(mem_before_values_to_rows(mem_before_with_flag))
         );
         let mem_after_trace = timed!(
             timing,
