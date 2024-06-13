@@ -12,7 +12,7 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::generation::MemBeforeValues;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
-use crate::memory_continuation::memory_continuation_stark::mem_before_values_to_rows;
+use crate::memory_before::memory_before_stark::mem_before_values_to_rows;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
 

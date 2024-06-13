@@ -3,4 +3,4 @@
 //! touched addresses.
 
 pub mod columns;
-pub mod memory_continuation_stark;
+pub mod memory_before_stark;

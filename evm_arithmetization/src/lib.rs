@@ -193,7 +193,7 @@ pub mod keccak_sponge;
 pub mod logic;
 pub mod memory;
 pub mod memory_after;
-pub mod memory_continuation;
+pub mod memory_before;
 
 // Proving system components
 pub mod all_stark;

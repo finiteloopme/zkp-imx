@@ -24,28 +24,52 @@ use crate::all_stark::EvmStarkFrame;
 use crate::generation::MemBeforeValues;
 use crate::memory::VALUE_LIMBS;
 
+/// CTL filter to send a row to Memory.
+/// Is 1 if filter is 1.
+pub(crate) fn ctl_filter_before_to_memory<F: Field>() -> Filter<F> {
+    // Corresponds to FILTER * (FILTER + 1) / 2.
+    let two_inv = F::TWO.inverse();
+    Filter::new(
+        vec![(
+            Column::linear_combination([(FILTER, two_inv)]),
+            Column::linear_combination_with_constant([(FILTER, F::ONE)], F::ONE),
+        )],
+        vec![Column::zero()],
+    )
+}
+
+/// CTL filter to send a row to MemAfter.
+/// Is 1 if filter is -1.
+pub(crate) fn ctl_filter_before_to_after<F: Field>() -> Filter<F> {
+    // Corresponds to FILTER * (FILTER - 1) / 2.
+    let two_inv = F::TWO.inverse();
+    Filter::new(
+        vec![(
+            Column::linear_combination([(FILTER, two_inv)]),
+            Column::linear_combination_with_constant([(FILTER, -F::ONE)], F::ONE),
+        )],
+        vec![Column::zero()],
+    )
+}
+
+/// Creates the vector of `Columns` corresponding to:
+/// - IS_READ set to 0
+/// - the initialized address (context, segment, virt),
+/// - the value in u32 limbs.
+pub(crate) fn ctl_data_with_is_read<F: Field>() -> Vec<Column<F>> {
+    let mut res = vec![Column::constant(F::ZERO)]; // IS_READ
+    res.extend(Column::singles([ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL]).collect_vec());
+    res.extend(Column::singles((0..8).map(value_limb)));
+    res.push(Column::constant(F::ZERO)); // TIMESTAMP
+    res
+}
+
 /// Creates the vector of `Columns` corresponding to:
 /// - the propagated address (context, segment, virt),
 /// - the value in u32 limbs.
 pub(crate) fn ctl_data<F: Field>() -> Vec<Column<F>> {
     let mut res = Column::singles([ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL]).collect_vec();
     res.extend(Column::singles((0..8).map(value_limb)));
-    res
-}
-
-/// CTL filter for memory operations.
-pub(crate) fn ctl_filter<F: Field>() -> Filter<F> {
-    Filter::new_simple(Column::single(FILTER))
-}
-
-/// Creates the vector of `Columns` corresponding to:
-/// - the initialized address (context, segment, virt),
-/// - the value in u32 limbs.
-pub(crate) fn ctl_data_memory<F: Field>() -> Vec<Column<F>> {
-    let mut res = vec![Column::constant(F::ZERO)]; // IS_READ
-    res.extend(Column::singles([ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL]).collect_vec());
-    res.extend(Column::singles((0..8).map(value_limb)));
-    res.push(Column::constant(F::ZERO)); // TIMESTAMP
     res
 }
 
@@ -69,13 +93,13 @@ pub(crate) fn mem_before_values_to_rows<F: Field>(
         .collect()
 }
 
-/// Structure representing the `ContinuationMemory` STARK.
+/// Structure representing the `MemoryBefore` STARK.
 #[derive(Copy, Clone, Default)]
-pub(crate) struct MemoryContinuationStark<F, const D: usize> {
+pub(crate) struct MemoryBeforeStark<F, const D: usize> {
     f: PhantomData<F>,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> MemoryBeforeStark<F, D> {
     pub(crate) fn generate_trace(
         &self,
         propagated_values: Vec<Vec<F>>,
@@ -98,7 +122,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryContinuationStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryBeforeStark<F, D> {
     type EvaluationFrame<FE, P, const D2: usize> = EvmStarkFrame<P, FE, NUM_COLUMNS>
     where
         FE: FieldExtension<D2, BaseField = F>,
@@ -153,14 +177,14 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use starky::stark_testing::{test_stark_circuit_constraints, test_stark_low_degree};
 
-    use crate::memory_continuation::memory_continuation_stark::MemoryContinuationStark;
+    use crate::memory_before::memory_before_stark::MemoryBeforeStark;
 
     #[test]
     fn test_stark_degree() -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = MemoryContinuationStark<F, D>;
+        type S = MemoryBeforeStark<F, D>;
 
         let stark = S::default();
         test_stark_low_degree(stark)
@@ -171,7 +195,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = MemoryContinuationStark<F, D>;
+        type S = MemoryBeforeStark<F, D>;
 
         let stark = S::default();
         test_stark_circuit_constraints::<F, C, S, D>(stark)
