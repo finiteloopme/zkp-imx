@@ -6,7 +6,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use serde::{Deserialize, Serialize};
-use trace_decoder::{trace_protocol::BlockTrace, types::OtherBlockData};
+use trace_decoder::{types::OtherBlockData, BlockTrace};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ProverInput {

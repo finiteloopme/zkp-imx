@@ -8,11 +8,11 @@ use mpt_trie::nibbles::Nibbles;
 
 use crate::compact::compact_prestate_processing::PartialTriePreImages;
 use crate::hash;
-use crate::trace_protocol::{ContractCodeUsage, TxnInfo};
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
     TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
+use crate::{ContractCodeUsage, TxnInfo};
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
