@@ -412,10 +412,10 @@ mod hex {
         T: hex::FromHex,
         T::Error: fmt::Display,
     {
-        let bytes = Cow::<[u8]>::deserialize(deserializer)?;
-        match bytes.strip_prefix(b"0x") {
+        let s = Cow::<str>::deserialize(deserializer)?;
+        match s.strip_prefix("0x") {
             Some(rest) => T::from_hex(rest),
-            None => T::from_hex(bytes),
+            None => T::from_hex(&*s),
         }
         .map_err(D::Error::custom)
     }
