@@ -21,7 +21,6 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
-    compact::compact_prestate_processing::CompactParsingError,
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
@@ -166,10 +165,6 @@ pub enum TraceParsingErrorReason {
     /// Failure due to a trie operation error.
     #[error("Trie operation error: {0}")]
     TrieOpError(TrieOpError),
-
-    /// Failure due to a compact parsing error.
-    #[error("Compact parsing error: {0}")]
-    CompactParsingError(CompactParsingError),
 }
 
 impl From<TrieOpError> for TraceParsingError {
@@ -178,14 +173,6 @@ impl From<TrieOpError> for TraceParsingError {
         TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err))
     }
 }
-
-impl From<CompactParsingError> for TraceParsingError {
-    fn from(err: CompactParsingError) -> Self {
-        // Convert CompactParsingError into TraceParsingError
-        TraceParsingError::new(TraceParsingErrorReason::CompactParsingError(err))
-    }
-}
-
 /// An enum to cover all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug)]
 pub enum TrieType {

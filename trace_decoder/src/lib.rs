@@ -118,9 +118,22 @@
 #[cfg(doc)]
 use trace_protocol::TxnInfo;
 
-/// Provides debugging tools and a compact representation of state and storage
-/// tries, used in tests.
-pub mod compact;
+mod compact {
+    pub mod compact_prestate_processing {
+        use std::collections::HashMap;
+
+        use mpt_trie::partial_trie::HashedPartialTrie;
+
+        use crate::types::HashedAccountAddr;
+
+        #[derive(Debug, Default)]
+        pub(crate) struct PartialTriePreImages {
+            pub state: HashedPartialTrie,
+            pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+        }
+    }
+}
+
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
