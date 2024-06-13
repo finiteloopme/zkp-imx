@@ -562,6 +562,7 @@ fn test_three_to_one_block_aggregation_ivc() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
 fn test_three_to_one_block_aggregation_binop() -> anyhow::Result<()> {
     init_logger();
     log::info!("Meta Stage 0:  Setup");
@@ -578,7 +579,7 @@ fn test_three_to_one_block_aggregation_binop() -> anyhow::Result<()> {
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
 
     log::info!("Meta Stage 1:  Compute block proofs");
-    let some_timestamps = [127, 42, 65];
+    let some_timestamps = [127, 42, 65, 43];
     let unrelated_block_proofs = some_timestamps
         .iter()
         .map(|&ts| {
@@ -594,13 +595,16 @@ fn test_three_to_one_block_aggregation_binop() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let aggproof01 = all_circuits.prove_two_to_one_block_binop(&bp[0], &bp[1])?;
+    let aggproof01 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof01)?;
 
-    let aggproof012 = all_circuits.prove_two_to_one_block_binop(&aggproof01, &bp[2])?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
+    let aggproof23 = all_circuits.prove_two_to_one_block_binop(&bp[2], false, &bp[3], false)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof23)?;
 
-    assert!(false, "Hoooray!!, 3-block aggregation was verified");
+    let aggproof0123 = all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &aggproof23, true)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof0123)?;
+
+    assert!(false, "Hoooray!!, 4-block aggregation was verified");
     Ok(())
 }
 
