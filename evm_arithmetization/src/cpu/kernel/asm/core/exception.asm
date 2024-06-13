@@ -171,6 +171,7 @@ global exc_stack_overflow_check_stack_length:
 global exc_stop:
     // Here, we need to check that the final registers have the correct value.
     // stack: trap_info
+global debug_recorcholis:
     PUSH @FINAL_REGISTERS_ADDR
     // stack: addr_registers, trap_info
     PUSH 3 
@@ -180,8 +181,10 @@ global exc_stop:
     // First, check the stack length.
     // stack: stack_len-3 = stack_len_before_exc, addr_registers, trap_info
     DUP2 %add_const(2)
+global debug_stack_len_addr:
     MLOAD_GENERAL
     // stack: stored_stack_length, stack_len_before_exc, addr_registers, trap_info
+global debug_stack_lenthg:
     DUP2 %assert_eq
 
     // Now, check that we end up with the correct stack_top.
@@ -206,6 +209,7 @@ global exc_stop:
     // stack: stored_stack_top, stack_top_before_exc, stack_len_before_exc, addr_registers, trap_info
     SUB MUL
     // stack: (stored_stack_top - stack_top_before_exc) * stack_len_before_exc, addr_registers, trap_info
+global debug_zero_check:
     %assert_zero
 
     // Check the program counter.
@@ -215,6 +219,7 @@ global exc_stop:
     DUP2
     MLOAD_GENERAL
     // stack: public_pc, program_counter, addr_registers, trap_info
+global debug_public_pc:
     %assert_eq
 
     // Check is_kernel_mode.
@@ -233,6 +238,7 @@ global exc_stop:
     // stack: gas_used, addr_registers
     DUP2 %add_const(5)
     MLOAD_GENERAL
+global debug_check_gas_halt:
     %assert_eq
 
     // Check the context.
