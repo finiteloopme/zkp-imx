@@ -494,7 +494,7 @@ next_node_ok:
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_storage_loaded!!!
-    %stack (addr, key, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (addr, key, payload_ptr, retdest) -> (retdest, 1, payload_ptr)
     JUMP
 
 /// Search the pair (addres, storage_key) in the storage the linked list.
