@@ -106,11 +106,11 @@ impl Visitor {
                 code_hash: match code {
                     Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
                     Some(Either::Right(Code { code })) => {
-                        let hash = crate::utils::hash(&code);
+                        let hash = crate::hash(&code);
                         self.reshape.code.insert(code);
                         hash
                     }
-                    None => crate::utils::hash(&[]),
+                    None => crate::hash(&[]),
                 },
                 storage_root: {
                     let storage = node2trie(match storage {

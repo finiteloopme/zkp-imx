@@ -142,8 +142,6 @@ pub mod processed_block_trace;
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.
 pub mod types;
-/// Defines useful functions necessary to the other modules.
-pub mod utils;
 
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::H256;
@@ -236,7 +234,7 @@ pub fn entrypoint(
                     true => None,
                     false => Some(
                         code.into_iter()
-                            .map(|it| (crate::utils::hash(&it), it.into_vec()))
+                            .map(|it| (crate::hash(&it), it.into_vec()))
                             .collect(),
                     ),
                 },
@@ -280,7 +278,7 @@ pub fn entrypoint(
                     .b_data
                     .withdrawals
                     .iter()
-                    .map(|(addr, _)| crate::utils::hash(addr.as_bytes()))
+                    .map(|(addr, _)| crate::hash(addr.as_bytes()))
                     .collect::<Vec<_>>()
             } else {
                 Vec::new()
@@ -300,6 +298,10 @@ pub fn entrypoint(
         withdrawals: other.b_data.withdrawals.clone(),
     }
     .into_txn_proof_gen_ir(other)?)
+}
+
+fn hash(bytes: &[u8]) -> ethereum_types::H256 {
+    keccak_hash::keccak(bytes).0.into()
 }
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
@@ -396,7 +398,7 @@ mod type1witness {
                         rlp::decode::<evm_arithmetization::generation::mpt::AccountRlp>(&bytes)
                             .unwrap()
                             .storage_root;
-                    if storage_root != crate::utils::hash(&[]) {
+                    if storage_root != crate::hash(&[]) {
                         assert!(reshaped
                             .storage
                             .contains_key(&ethereum_types::H256::from_slice(&k.bytes_be())))

@@ -21,6 +21,7 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
+    hash,
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
@@ -29,7 +30,6 @@ use crate::{
         OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
         ZERO_STORAGE_SLOT_VAL_RLPED,
     },
-    utils::{hash, optional_field, optional_field_hex, update_val_if_some},
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
@@ -895,4 +895,18 @@ impl TxnMetaState {
             None => Vec::default(),
         }
     }
+}
+
+fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
+    if let Some(new_val) = opt {
+        *target = new_val;
+    }
+}
+
+fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) -> String {
+    value.map_or(String::new(), |v| format!("{}: {:?}\n", label, v))
+}
+
+fn optional_field_hex<T: std::fmt::UpperHex>(label: &str, value: Option<T>) -> String {
+    value.map_or(String::new(), |v| format!("{}: 0x{:064X}\n", label, v))
 }

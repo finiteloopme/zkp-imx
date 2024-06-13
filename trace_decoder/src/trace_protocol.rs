@@ -28,8 +28,8 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    hash,
     types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
-    utils::hash,
 };
 
 /// Core payload needed to generate a proof for a block. Note that the scheduler
