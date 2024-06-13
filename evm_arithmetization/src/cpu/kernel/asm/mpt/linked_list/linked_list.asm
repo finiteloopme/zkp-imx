@@ -67,12 +67,12 @@ global init_linked_lists:
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account_to_linked_list)
 %%after:
-    // stack: cold_access, account_ptr
+    // stack: access_ctr_ptr, cold_access, account_ptr
 %endmacro
 
 %macro insert_account_to_linked_list_no_return
     %insert_account_to_linked_list
-    %pop2
+    %pop3
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/4, by 4
@@ -92,8 +92,8 @@ global init_linked_lists:
 %endmacro
 
 /// Inserts the account addr and payload pointer into the linked list if it is not already present.
-/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `access_ctr_ptr, 1, payload_ptr` if the account was inserted, `access_ctr_ptr, 1, original_ptr` if it was already present
+/// and this is the first access, or `access_ctr_ptr, 0, original_ptr` if it was already present and accessed.
 global insert_account_to_linked_list:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -139,16 +139,10 @@ account_found:
     // stack: pred_ptr + 2, orig_payload_ptr, addr, payload_ptr, retdest
     DUP1
     MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
-    MSTORE_GENERAL
-    // stack: access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+    // stack: access_ctr, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest
+    // If access_ctr == 0 then this it's a cold access 
+    ISZERO
+    %stack (cold_access, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, access_ctr_ptr, cold_access, orig_payload_ptr)
     JUMP
 
 insert_new_account:
@@ -257,8 +251,8 @@ global search_account:
 account_not_found:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     %pop3
-    %stack (payload_ptr, retdest) -> (retdest, 1, payload_ptr)
-    // stack: retdest, cold_access, payload_ptr, retdest
+    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
+    // stack: retdest, access_ctr_ptr, cold_access, payload_ptr, retdest
     JUMP
 
 %macro remove_account_from_linked_list
@@ -316,12 +310,20 @@ global remove_account:
     %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
     %jump(insert_slot)
 %%after:
-    // stack: cold_access, value_ptr
+    // stack: access_ctr_ptr, cold_access, value_ptr
+    POP
+%endmacro
+
+%macro insert_slot_return_ptr
+    %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
+    %jump(insert_slot)
+%%after:
+    // stack: access_ctr_ptr, cold_access, value_ptr
 %endmacro
 
 %macro insert_slot_no_return
     %insert_slot
-    %pop2
+    %pop3
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -404,16 +406,10 @@ slot_found:
     %increment
     DUP1
     MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-    MSTORE_GENERAL
-    // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+    // stack: access_ctr, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest
+    // If access_ctr == 0 then this it's a cold access 
+    ISZERO
+    %stack (cold_access, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, access_ctr_ptr, cold_access, orig_payload_ptr)
     JUMP
 insert_new_slot:
     // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
@@ -551,7 +547,7 @@ global search_slot:
 slot_not_found:    
 // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %pop4
-    %stack (payload_ptr, retdest) -> (retdest, 1, payload_ptr)
+    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
     JUMP
 
 
@@ -610,8 +606,17 @@ global remove_slot:
     %addr_to_state_key
     %jump(search_account)
 %%after:
-    // stack: cold_access, account_ptr
-    POP
+    // stack: access_ctr_ptr, cold_access, account_ptr
+    %pop2
+%endmacro
+
+%macro read_accounts_linked_list_return_ctr_ptr
+    %stack (addr) -> (addr, 0, %%after)
+    %addr_to_state_key
+    %jump(search_account)
+%%after:
+    // stack: access_ctr_ptr, cold_access, account_ptr
+    SWAP2 %pop2
 %endmacro
 
 %macro read_storage_linked_list
@@ -622,8 +627,8 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, value_ptr
-    POP
+    // stack: access_ctr_ptr, cold_access, value_ptr
+    %pop2
 %endmacro
 
 %macro read_slot_linked_list
@@ -633,8 +638,19 @@ global remove_slot:
     %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, value_ptr
-    POP
+    // stack: access_ctr_ptr, cold_access, value_ptr
+    %pop2
+%endmacro
+
+%macro read_slot_linked_list_return_ctr_ptr
+    // stack: address, slot
+    %addr_to_state_key
+    SWAP1 %slot_to_storage_key
+    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
+    %jump(search_slot)
+%%after:
+    // stack: access_ctr_ptr, cold_access, value_ptr
+    SWAP2 %pop2
 %endmacro
 
 %macro read_storage_linked_list_w_addr
@@ -645,8 +661,8 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, payload_ptr
-    POP
+    // stack: access_ctr_ptr, cold_access, payload_ptr
+    %pop2
 %endmacro
 
 %macro first_account
