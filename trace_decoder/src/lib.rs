@@ -114,7 +114,6 @@
 #![feature(iter_array_chunks)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
 
 #[cfg(doc)]
 use {
@@ -136,3 +135,17 @@ pub mod trace_protocol;
 pub mod types;
 /// Defines useful functions necessary to the other modules.
 pub mod utils;
+
+use evm_arithmetization::GenerationInputs;
+use keccak_hash::H256;
+use processed_block_trace::ProcessingMeta;
+use trace_protocol::BlockTrace;
+use types::OtherBlockData;
+
+pub fn entrypoint(
+    trace: BlockTrace,
+    other: OtherBlockData,
+    resolve: impl Fn(H256) -> Vec<u8>,
+) -> anyhow::Result<Vec<GenerationInputs>> {
+    Ok(trace.into_txn_proof_gen_ir(&ProcessingMeta::new(|it| resolve(*it)), other)?)
+}

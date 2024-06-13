@@ -29,6 +29,7 @@ thiserror = { workspace = true }
 # Local dependencies
 mpt_trie = { version = "0.3.0", path = "../mpt_trie" }
 evm_arithmetization = { version = "0.2.0", path = "../evm_arithmetization" }
+anyhow = "1.0.86"
 
 [dev-dependencies]
 criterion = "0.5.1"
