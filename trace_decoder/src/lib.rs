@@ -87,13 +87,13 @@ pub mod types;
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
-use types::OtherBlockData;
 
-use crate::types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal};
+use crate::types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal, TrieRootHash};
 
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
@@ -251,12 +251,33 @@ pub enum ContractCodeUsage {
 }
 
 impl ContractCodeUsage {
-    pub(crate) fn get_code_hash(&self) -> CodeHash {
+    fn get_code_hash(&self) -> CodeHash {
         match self {
             ContractCodeUsage::Read(hash) => *hash,
             ContractCodeUsage::Write(bytes) => hash(bytes),
         }
     }
+}
+
+/// Other data that is needed for proof gen.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct OtherBlockData {
+    /// Data that is specific to the block.
+    pub b_data: BlockLevelData,
+    /// State trie root hash at the checkpoint.
+    pub checkpoint_state_trie_root: TrieRootHash,
+}
+
+/// Data that is specific to a block and is constant for all txns in a given
+/// block.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BlockLevelData {
+    /// All block data excluding block hashes and withdrawals.
+    pub b_meta: BlockMetadata,
+    /// Block hashes: the previous 256 block hashes and the current block hash.
+    pub b_hashes: BlockHashes,
+    /// Block withdrawal addresses and values.
+    pub withdrawals: Vec<(Address, U256)>,
 }
 
 pub fn entrypoint(
