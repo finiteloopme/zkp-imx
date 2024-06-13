@@ -1,26 +1,3 @@
-//! The trace protocol for sending proof information to a prover scheduler.
-//!
-//! Because parsing performance has a very negligible impact on overall proof
-//! generation latency & throughput, the overall priority of this protocol is
-//! ease of implementation for clients. The flexibility comes from giving
-//! multiple ways to the client to provide the data for the protocol, where the
-//! implementors can pick whichever way is the most convenient for them.
-//!
-//! It might not be obvious why we need traces for each txn in order to generate
-//! proofs. While it's true that we could just run all the txns of a block in an
-//! EVM to generate the traces ourselves, there are a few major downsides:
-//! - The client is likely a full node and already has to run the txns in an EVM
-//!   anyways.
-//! - We want this protocol to be as agnostic as possible to the underlying
-//!   chain that we're generating proofs for, and running our own EVM would
-//!   likely cause us to loose this genericness.
-//!
-//! While it's also true that we run our own zk-EVM (plonky2) to generate
-//! proofs, it's critical that we are able to generate txn proofs in parallel.
-//! Since generating proofs with plonky2 is very slow, this would force us to
-//! sequentialize the entire proof generation process. So in the end, it's ideal
-//! if we can get this information sent to us instead.
-
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
@@ -35,17 +12,22 @@ use crate::{
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
 /// order to generate a proof.
+///
+/// The trie preimages are the hashed partial tries at the
+/// start of the block. A [TxnInfo] contains all the transaction data
+/// necessary to generate an IR.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockTrace {
-    /// The trie pre-images (state & storage) in multiple possible formats.
+    /// The state and storage trie pre-images (i.e. the tries before
+    /// the execution of the current block) in multiple possible formats.
     pub trie_pre_images: BlockTraceTriePreImages,
 
     /// The code_db is a map of code hashes to the actual code. This is needed
     /// to execute transactions.
     pub code_db: Option<HashMap<CodeHash, Vec<u8>>>,
 
-    /// Traces and other info per txn. The index of the txn corresponds to the
-    /// slot in this vec.
+    /// Traces and other info per transaction. The index of the transaction
+    /// within the block corresponds to the slot in this vec.
     pub txn_info: Vec<TxnInfo>,
 }
 

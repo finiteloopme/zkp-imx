@@ -1,87 +1,29 @@
+//! The trace protocol for sending proof information to a prover scheduler.
+//!
+//! Because parsing performance has a very negligible impact on overall proof
+//! generation latency & throughput, the overall priority of this protocol is
+//! ease of implementation for clients. The flexibility comes from giving
+//! multiple ways to the client to provide the data for the protocol, where the
+//! implementors can pick whichever way is the most convenient for them.
+//!
+//! It might not be obvious why we need traces for each txn in order to generate
+//! proofs. While it's true that we could just run all the txns of a block in an
+//! EVM to generate the traces ourselves, there are a few major downsides:
+//! - The client is likely a full node and already has to run the txns in an EVM
+//!   anyways.
+//! - We want this protocol to be as agnostic as possible to the underlying
+//!   chain that we're generating proofs for, and running our own EVM would
+//!   likely cause us to loose this genericness.
+//!
+//! While it's also true that we run our own zk-EVM (plonky2) to generate
+//! proofs, it's critical that we are able to generate txn proofs in parallel.
+//! Since generating proofs with plonky2 is very slow, this would force us to
+//! sequentialize the entire proof generation process. So in the end, it's ideal
+//! if we can get this information sent to us instead.
+//!
 //! This library generates an Intermediary Representation (IR) of
 //! a block's transactions, given a [BlockTrace] and some additional
 //! data represented by [OtherBlockData].
-//!
-//! A [BlockTrace] is defined as follows:
-//! ```ignore
-//! pub struct BlockTrace {
-//!     /// The state and storage trie pre-images (i.e. the tries before
-//!     /// the execution of the current block) in multiple possible formats.
-//!     pub trie_pre_images: BlockTraceTriePreImages,
-//!     /// Traces and other info per transaction. The index of the transaction
-//!     /// within the block corresponds to the slot in this vec.
-//!     pub txn_info: Vec<TxnInfo>,
-//! }
-//! ```
-//! The trie preimages are the hashed partial tries at the
-//! start of the block. A [TxnInfo] contains all the transaction data
-//! necessary to generate an IR.
-//!
-//! # Usage
-//!
-//! [The zero-bin prover](https://github.com/topos-protocol/zero-bin/blob/main/prover/src/lib.rs)
-//! provides a use case for this library:
-//! ```ignore
-//!  pub async fn prove(
-//!      // In this example, [self] is a [ProverInput] storing a [BlockTrace] and
-//!      // [OtherBlockData].
-//!      self,
-//!      runtime: &Runtime,
-//!      previous: Option<PlonkyProofIntern>,
-//!  ) -> Result<GeneratedBlockProof> {
-//!      let block_number = self.get_block_number();
-//!      info!("Proving block {block_number}");
-//!
-//!      let other_data = self.other_data;
-//!      // The method calls [into_txn_proof_gen_ir] (see below) to
-//!      // generate an IR for each block transaction.
-//!      let txs = self.block_trace.into_txn_proof_gen_ir(
-//!          &ProcessingMeta::new(resolve_code_hash_fn),
-//!          other_data.clone(),
-//!      )?;
-//!
-//!      // The block IRs are provided to the prover to generate an
-//!      // aggregation proof.
-//!      let agg_proof = IndexedStream::from(txs)
-//!          .map(&TxProof)
-//!          .fold(&AggProof)
-//!          .run(runtime)
-//!          .await?;
-//!
-//!      
-//!      if let AggregatableProof::Agg(proof) = agg_proof {
-//!          let prev = previous.map(|p| GeneratedBlockProof {
-//!              b_height: block_number.as_u64() - 1,
-//!              intern: p,
-//!          });
-//!
-//!          // The final aggregation proof is then used to prove the
-//!          // current block.
-//!          let block_proof = Literal(proof)
-//!              .map(&BlockProof { prev })
-//!              .run(runtime)
-//!              .await?;
-//!
-//!          info!("Successfully proved block {block_number}");
-//!          Ok(block_proof.0)
-//!      } else {
-//!          bail!("AggProof is is not GeneratedAggProof")
-//!      }
-//!  }
-//! ```
-//!
-//! As we see in the example, to turn a [BlockTrace] into a
-//! vector of IRs, one must call the method
-//! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir):
-//! ```ignore
-//! pub fn into_txn_proof_gen_ir<F>(
-//!     self,
-//!     // Specifies the way code hashes should be dealt with.
-//!     p_meta: &ProcessingMeta<F>,
-//!     // Extra data needed for proof generation.
-//!     other_data: OtherBlockData,
-//! ) -> TraceParsingResult<Vec<GenerationInputs>>
-//! ```
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
 //! withdrawals and tries data that can be directly used to generate an IR.
