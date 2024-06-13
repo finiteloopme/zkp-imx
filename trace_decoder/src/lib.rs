@@ -123,7 +123,6 @@ use trace_protocol::TxnInfo;
 pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
-mod deserializers;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
 pub mod processed_block_trace;
@@ -299,6 +298,34 @@ pub fn new_entrypoint(
         withdrawals: other.b_data.withdrawals.clone(),
     }
     .into_txn_proof_gen_ir(other)?)
+}
+
+/// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
+mod hex {
+    use std::{borrow::Cow, fmt};
+
+    use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer, T>(data: T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        T: hex::ToHex,
+    {
+        let s = data.encode_hex::<String>();
+        serializer.serialize_str(&format!("0x{}", s))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        T: hex::FromHex,
+        T::Error: fmt::Display,
+    {
+        let bytes = Cow::<[u8]>::deserialize(deserializer)?;
+        match bytes.strip_prefix(b"0x") {
+            Some(rest) => T::from_hex(rest),
+            None => T::from_hex(bytes),
+        }
+        .map_err(D::Error::custom)
+    }
 }
 
 mod type1witness {

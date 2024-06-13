@@ -352,8 +352,8 @@ impl TxnInfo {
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
 
-                        contract_code_accessed.insert(c_hash, c_bytes.0.clone());
-                        code_hash_resolver.insert_code(c_hash, c_bytes.0);
+                        contract_code_accessed.insert(c_hash, c_bytes.clone());
+                        code_hash_resolver.insert_code(c_hash, c_bytes);
                     }
                 }
             }

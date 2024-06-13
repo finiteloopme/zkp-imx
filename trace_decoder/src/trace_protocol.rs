@@ -26,10 +26,8 @@ use std::collections::HashMap;
 use ethereum_types::{Address, U256};
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, FromInto, TryFromInto};
 
 use crate::{
-    deserializers::ByteString,
     types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
     utils::hash,
 };
@@ -94,11 +92,9 @@ pub struct CombinedPreImages {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieUncompressed {}
 
-// TODO
-#[serde_as]
 /// Compact representation of a trie (will likely be very close to <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>)
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TrieCompact(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
+pub struct TrieCompact(#[serde(with = "crate::hex")] pub Vec<u8>);
 
 // TODO
 /// Trie format that is in exactly the same format of our internal trie format.
@@ -135,23 +131,23 @@ pub struct TxnInfo {
 }
 
 /// Structure holding metadata for one transaction.
-#[serde_as]
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TxnMeta {
     /// Txn byte code.
-    #[serde_as(as = "FromInto<ByteString>")]
+    #[serde(with = "crate::hex")]
     pub byte_code: Vec<u8>,
 
     /// Rlped bytes of the new txn value inserted into the txn trie by
     /// this txn. Note that the key is not included and this is only the rlped
     /// value of the node!
-    #[serde_as(as = "FromInto<ByteString>")]
+    #[serde(with = "crate::hex")]
     pub new_txn_trie_node_byte: Vec<u8>,
 
     /// Rlped bytes of the new receipt value inserted into the receipt trie by
     /// this txn. Note that the key is not included and this is only the rlped
     /// value of the node!
-    #[serde_as(as = "TryFromInto<ByteString>")]
+    #[serde(with = "crate::hex")]
     pub new_receipt_trie_node_byte: Vec<u8>,
 
     /// Gas used by this txn (Note: not cumulative gas used).
@@ -197,7 +193,7 @@ pub struct TxnTrace {
 }
 
 /// Contract code access type. Used by txn traces.
-#[serde_as]
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
@@ -206,7 +202,7 @@ pub enum ContractCodeUsage {
 
     /// Contract was created (and these are the bytes). Note that this new
     /// contract code will not appear in the [`BlockTrace`] map.
-    Write(#[serde_as(as = "FromInto<ByteString>")] ByteString),
+    Write(#[serde(with = "crate::hex")] Vec<u8>),
 }
 
 impl ContractCodeUsage {
