@@ -54,8 +54,6 @@ pub struct SeparateTriePreImages {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateTriePreImage {
-    /// Storage or state trie in a bulkier format, that can be processed faster.
-    Uncompressed(TrieUncompressed),
     /// Storage or state trie format that can be processed as is, as it
     /// corresponds to the internal format.
     Direct(TrieDirect),
@@ -68,11 +66,6 @@ pub struct CombinedPreImages {
     /// Compact combined state and storage tries.
     pub compact: TrieCompact,
 }
-
-// TODO
-/// Bulkier format that is quicker to process.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TrieUncompressed {}
 
 /// Compact representation of a trie (will likely be very close to <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>)
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -88,11 +81,6 @@ pub struct TrieDirect(pub HashedPartialTrie);
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateStorageTriesPreImage {
-    /// A single hash map that contains all node hashes from all storage tries
-    /// involved in the block. We can reconstruct the individual storage tries
-    /// by the storage root hash in the state entries.
-    SingleTrie(TrieUncompressed),
-
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
     MultipleTries(HashMap<HashedAccountAddr, SeparateTriePreImage>),

@@ -106,7 +106,7 @@ pub fn entrypoint(
     };
     use crate::trace_protocol::{
         BlockTraceTriePreImages, CombinedPreImages, SeparateStorageTriesPreImage,
-        SeparateTriePreImage, SeparateTriePreImages, TrieCompact, TrieDirect, TrieUncompressed,
+        SeparateTriePreImage, SeparateTriePreImages, TrieCompact, TrieDirect,
     };
 
     let BlockTrace {
@@ -120,29 +120,15 @@ pub fn entrypoint(
             ProcessedBlockTracePreImages {
                 tries: PartialTriePreImages {
                     state: match state {
-                        // TODO(0xaatif): remove this variant
-                        SeparateTriePreImage::Uncompressed(TrieUncompressed {}) => {
-                            bail!("unsupported format")
-                        }
                         SeparateTriePreImage::Direct(TrieDirect(it)) => it,
                     },
                     storage: match storage {
-                        // TODO(0xaatif): remove this variant
-                        //                the old code just panics here
-                        SeparateStorageTriesPreImage::SingleTrie(TrieUncompressed {}) => {
-                            bail!("unsupported format")
-                        }
                         SeparateStorageTriesPreImage::MultipleTries(it) => it
                             .into_iter()
                             .map(|(k, v)| match v {
-                                // TODO(0xaatif): remove this variant
-                                //                the old code just panics here
-                                SeparateTriePreImage::Uncompressed(TrieUncompressed {}) => {
-                                    bail!("unsupported format")
-                                }
-                                SeparateTriePreImage::Direct(TrieDirect(v)) => Ok((k, v)),
+                                SeparateTriePreImage::Direct(TrieDirect(v)) => (k, v),
                             })
-                            .collect::<Result<_, _>>()?,
+                            .collect(),
                     },
                 },
                 extra_code_hash_mappings: None,
