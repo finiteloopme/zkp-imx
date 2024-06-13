@@ -27,8 +27,7 @@
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
 //! withdrawals and tries data that can be directly used to generate an IR.
-//! For each transaction,
-//! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir) extracts the
+//! For each transaction, this library extracts the
 //! necessary data from the processed transaction information to
 //! return the IR.
 //!
@@ -51,37 +50,13 @@
 //! - if there are withdrawals, one dummy transaction is added at the end, with
 //!   all the withdrawals in it.
 
-#![feature(linked_list_cursors)]
-#![feature(trait_alias)]
-#![feature(iter_array_chunks)]
 #![deny(rustdoc::broken_intra_doc_links)]
-// #![deny(missing_debug_implementations)]
-
-#[cfg(doc)]
-use trace_protocol::TxnInfo;
-
-mod compact {
-    pub mod compact_prestate_processing {
-        use std::collections::HashMap;
-
-        use ethereum_types::H256;
-        use mpt_trie::partial_trie::HashedPartialTrie;
-
-        #[derive(Debug, Default)]
-        pub(crate) struct PartialTriePreImages {
-            pub state: HashedPartialTrie,
-            pub storage: HashMap<H256, HashedPartialTrie>,
-        }
-    }
-}
 
 /// Defines the main functions used to generate the IR.
-pub mod decoding;
+mod decoding;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
-pub mod processed_block_trace;
-/// Defines multiple types used in the other modules.
-pub mod types;
+mod processed_block_trace;
 
 use std::collections::HashMap;
 
@@ -287,10 +262,10 @@ pub fn entrypoint(
     use mpt_trie::partial_trie::PartialTrie as _;
     use type1witness::{execution, reshape, wire};
 
-    use crate::compact::compact_prestate_processing::PartialTriePreImages;
     use crate::processed_block_trace::{
         CodeHashResolving, ProcessedBlockTrace, ProcessedBlockTracePreImages,
     };
+    use crate::PartialTriePreImages;
     use crate::{
         BlockTraceTriePreImages, CombinedPreImages, SeparateStorageTriesPreImage,
         SeparateTriePreImage, SeparateTriePreImages,
@@ -412,6 +387,12 @@ fn hash(bytes: &[u8]) -> ethereum_types::H256 {
     keccak_hash::keccak(bytes).0.into()
 }
 
+#[derive(Debug, Default)]
+struct PartialTriePreImages {
+    pub state: HashedPartialTrie,
+    pub storage: HashMap<H256, HashedPartialTrie>,
+}
+
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {
     use std::{borrow::Cow, fmt};
@@ -447,14 +428,14 @@ mod type1witness {
     /// Execution of [`Instruction`]s from the wire into a trie.
     ///
     /// Use of a stack machine is amenable to streaming off the wire.
-    pub(crate) mod execution;
-    pub(crate) mod reshape;
+    pub mod execution;
+    pub mod reshape;
     /// Simple nibble representation.
     mod u4;
     /// Parser combinators for the binary "wire" format.
     ///
     /// Use of [`winnow`] is amenable to streaming off the wire.
-    pub(crate) mod wire;
+    pub mod wire;
 
     fn nibbles2nibbles(ours: Vec<u4::U4>) -> mpt_trie::nibbles::Nibbles {
         let mut theirs = mpt_trie::nibbles::Nibbles::default();

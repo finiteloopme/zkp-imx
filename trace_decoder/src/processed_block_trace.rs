@@ -6,16 +6,27 @@ use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
 
-use crate::compact::compact_prestate_processing::PartialTriePreImages;
 use crate::hash;
-use crate::types::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
+use crate::PartialTriePreImages;
 use crate::{ContractCodeUsage, TxnInfo};
+
+// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+const EMPTY_CODE_HASH: H256 = H256([
+    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
+    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+]);
+
+/// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
+const EMPTY_TRIE_HASH: H256 = H256([
+    86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
+    108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
+]);
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
-    pub(crate) tries: PartialTriePreImages,
-    pub(crate) txn_info: Vec<ProcessedTxnInfo>,
-    pub(crate) withdrawals: Vec<(Address, U256)>,
+    pub tries: PartialTriePreImages,
+    pub txn_info: Vec<ProcessedTxnInfo>,
+    pub withdrawals: Vec<(Address, U256)>,
 }
 
 #[derive(Debug)]
@@ -26,12 +37,12 @@ pub(crate) struct ProcessedBlockTracePreImages {
 
 #[derive(Debug)]
 pub(crate) struct ProcessedTxnInfo {
-    pub(crate) nodes_used_by_txn: NodesUsedByTxn,
-    pub(crate) contract_code_accessed: HashMap<H256, Vec<u8>>,
-    pub(crate) meta: TxnMetaState,
+    pub nodes_used_by_txn: NodesUsedByTxn,
+    pub contract_code_accessed: HashMap<H256, Vec<u8>>,
+    pub meta: TxnMetaState,
 }
 
-pub struct CodeHashResolving<F> {
+pub(crate) struct CodeHashResolving<F> {
     /// If we have not seen this code hash before, use the resolve function that
     /// the client passes down to us. This will likely be an rpc call/cache
     /// check.

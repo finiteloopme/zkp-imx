@@ -25,13 +25,22 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
-    types::{EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED},
     OtherBlockData,
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
 /// failure.
 pub type TraceParsingResult<T> = Result<T, Box<TraceParsingError>>;
+
+const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
+    248, 68, 128, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
+    110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210, 70,
+    1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59,
+    123, 250, 216, 4, 93, 133, 164, 112,
+];
+
+// This is just `rlp(0)`.
+const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
 /// Represents errors that can occur during the processing of a block trace.
 ///
@@ -79,7 +88,7 @@ impl std::error::Error for TraceParsingError {}
 
 impl TraceParsingError {
     /// Function to create a new TraceParsingError with mandatory fields
-    pub(crate) fn new(reason: TraceParsingErrorReason) -> Self {
+    fn new(reason: TraceParsingErrorReason) -> Self {
         Self {
             block_num: None,
             block_chain_id: None,
@@ -93,13 +102,13 @@ impl TraceParsingError {
     }
 
     /// Builder method to set block_num
-    pub(crate) fn block_num(&mut self, block_num: U256) -> &mut Self {
+    fn block_num(&mut self, block_num: U256) -> &mut Self {
         self.block_num = Some(block_num);
         self
     }
 
     /// Builder method to set block_chain_id
-    pub(crate) fn block_chain_id(&mut self, block_chain_id: U256) -> &mut Self {
+    fn block_chain_id(&mut self, block_chain_id: U256) -> &mut Self {
         self.block_chain_id = Some(block_chain_id);
         self
     }
@@ -146,10 +155,6 @@ pub enum TraceParsingErrorReason {
     /// from the base trie.
     #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
     MissingAccountStorageTrie(H256),
-
-    /// Failure due to trying to access a non-existent key in the trie.
-    #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
-    NonExistentTrieEntry(TrieType, Nibbles, H256),
 
     /// Failure due to missing keys when creating a sub-partial trie.
     #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
@@ -214,7 +219,7 @@ struct TrieDeltaApplicationOutput {
 }
 
 impl ProcessedBlockTrace {
-    pub(crate) fn into_txn_proof_gen_ir(
+    pub fn into_txn_proof_gen_ir(
         self,
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<GenerationInputs>> {
