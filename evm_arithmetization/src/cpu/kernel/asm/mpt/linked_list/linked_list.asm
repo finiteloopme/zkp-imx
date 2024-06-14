@@ -185,29 +185,31 @@ insert_new_account:
     DUP1
     PUSH 0
     MSTORE_GENERAL
+    // stack: new_ctr_ptr, next_ptr, addr, payload_ptr, retdest
+    DUP1
     %increment
     DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, addr, payload_ptr, retdest
-    SWAP2
+    // stack: new_next_ptr, new_next_ptr, new_ctr_ptr, next_ptr, addr, payload_ptr, retdest
+    SWAP3
     MSTORE_GENERAL
-    // stack: new_next_ptr, addr, payload_ptr, retdest
-    %increment
+    // stack: new_ctr_ptr, new_next_ptr, addr, payload_ptr, retdest
+    SWAP1 %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
-    // stack: addr, payload_ptr, retdest
+    // stack: new_ctr_ptr, addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
-    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (new_ctr_ptr, addr, payload_ptr, retdest) -> (retdest, new_ctr_ptr, 0, payload_ptr)
     JUMP
 
 %macro search_account
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(search_account)
 %%after:
-    // stack: cold_access, payload_ptr
+    // stack: access_ctr_ptr, cold_access, payload_ptr
 %endmacro
 
 %macro search_account_no_return
     %search_account
-    %pop2
+    %pop3
 %endmacro
 
 
@@ -323,7 +325,8 @@ global remove_account:
 
 %macro insert_slot_no_return
     %insert_slot
-    %pop3
+    // stack: cold_access, value_ptr
+    %pop2
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -479,18 +482,18 @@ next_node_ok:
     DUP1
     PUSH 0
     MSTORE_GENERAL
-    // stack: new_ptr + 3, next_ptr, addr, key, payload_ptr, retdest
+    // stack: new_ptr + 3 = new_ctr_ptr, next_ptr, addr, key, payload_ptr, retdest
+    DUP1
     %increment
     DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, addr, key, payload_ptr, retdest
-    SWAP2
+    // stack: new_next_ptr, new_next_ptr, new_ctr_ptr, next_ptr, addr, key, payload_ptr, retdest
+    SWAP3
     MSTORE_GENERAL
-    // stack: new_next_ptr, addr, key, payload_ptr, retdest
-    %increment
+    // stack: new_ctr_ptr, new_next_ptr, addr, key, payload_ptr, retdest
+    SWAP1 %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    // stack: addr, key, payload_ptr, retdest
-    // TODO: Don't for get to %journal_add_storage_loaded!!!
-    %stack (addr, key, payload_ptr, retdest) -> (retdest, 1, payload_ptr)
+    // stack: new_ctr_ptr, addr, key, payload_ptr, retdest
+    %stack (new_ctr_ptr, addr, key, payload_ptr, retdest) -> (retdest, new_ctr_ptr, 1, payload_ptr)
     JUMP
 
 /// Search the pair (addres, storage_key) in the storage the linked list.
