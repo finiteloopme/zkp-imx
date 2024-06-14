@@ -126,7 +126,6 @@ global insert_account_to_linked_list:
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
     PANIC
-
 account_found:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
@@ -145,7 +144,7 @@ account_found:
     ISZERO
     %stack (cold_access, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, access_ctr_ptr, cold_access, orig_payload_ptr)
     JUMP
-
+//DEBUG
 insert_new_account:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     POP
@@ -469,6 +468,7 @@ next_node_ok:
     // Write the address in the new node
     DUP1
     DUP4
+global debug_yo_no_me_llamo_javier:
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr, key, payload_ptr, retdest
     // Write the key in the new node
