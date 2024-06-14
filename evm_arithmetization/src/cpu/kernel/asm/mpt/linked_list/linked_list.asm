@@ -82,10 +82,11 @@ global init_linked_lists:
 %macro get_valid_account_ptr
      // stack: ptr/4
     DUP1
+    PUSH 4
     %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // By construction, both @SEGMENT_ACCESSED_STORAGE_KEYS and the unscaled list len
     // must be multiples of 4
-    %div_const(4)
+    DIV
     // stack: @SEGMENT_ACCESSED_STORAGE_KEYS/4 + accessed_strg_keys_len/4, ptr/4, ptr/4
     %assert_gt
     %mul_const(4)
@@ -347,7 +348,8 @@ global remove_account:
     %add_const(@SEGMENT_STORAGE_LINKED_LIST)
 %endmacro
 
-/// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present.
+/// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
+/// or modify its payload if it was already present.
 /// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global insert_slot:
@@ -393,11 +395,11 @@ global before_jumpi:
     DUP1
     %add_const(4)
     MLOAD_GENERAL
-    %jump_neq_const(@U256_MAX, slot_found)
+    %jump_neq_const(@U256_MAX, slot_found_write)
     // The storage key is not in the list.
     PANIC
 
-slot_found:
+slot_found_write:
     // The slot was already in the list
     // stack: pred_ptr, addr, key, payload_ptr, retdest
     // Load the the payload pointer and access counter
@@ -405,6 +407,11 @@ slot_found:
     DUP1
     MLOAD_GENERAL
     // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
+    DUP2
+    DUP6
+global debug_store_new_payload:
+    MSTORE_GENERAL // Store the new payload
+
     SWAP1
     %increment
     DUP1
@@ -496,7 +503,7 @@ next_node_ok:
     %stack (new_ctr_ptr, addr, key, payload_ptr, retdest) -> (retdest, new_ctr_ptr, 1, payload_ptr)
     JUMP
 
-/// Search the pair (addres, storage_key) in the storage the linked list.
+/// Search the pair (address, storage_key) in the storage the linked list.
 /// Returns `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 // TODO: Not sure if this is correct, bc if a value is not found we need to return 0 but keep track of it for
@@ -543,14 +550,33 @@ global search_slot:
     DUP1
     %add_const(4)
     MLOAD_GENERAL
-    %jump_neq_const(@U256_MAX, slot_found)
+    %jump_neq_const(@U256_MAX, slot_found_no_write)
     // The storage key is not in the list.
     PANIC
 
+global debug_slot_not_found:
 slot_not_found:    
-// stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
-    %pop4
-    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
+    // stack: pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    %stack (pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest)
+        -> (retdest, 0, 1, payload_ptr)
+    JUMP
+
+slot_found_no_write:
+    // The slot was already in the list
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    // Load the the payload pointer and access counter
+    %add_const(2)
+    DUP1
+    MLOAD_GENERAL
+    // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
+    SWAP1
+    %increment
+    DUP1
+    MLOAD_GENERAL
+    // stack: access_ctr, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest
+    // If access_ctr == 1 then this it's a cold access 
+    %eq_const(0)
+    %stack (cold_access, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, access_ctr_ptr, cold_access, orig_payload_ptr)
     JUMP
 
 

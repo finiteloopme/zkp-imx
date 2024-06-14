@@ -45,9 +45,6 @@ global hash_initial_tries:
     // can check the value provided by the prover.
     // The trie data segment is already written by the linked lists
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
-    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-global debug_check_hash:
-    %assert_eq
 
     %set_initial_tries
     %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
@@ -106,8 +103,14 @@ execute_withdrawals_post_stack_op:
 global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
-    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) %assert_eq
-    DUP3 %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
+    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) 
+global debug_check_gas:
+    %assert_eq
+
+    
+    DUP3 %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER)
+global debug_check_txn_number:
+    %assert_eq
     %pop3
     PUSH 1 // initial trie data length
 global check_state_trie:

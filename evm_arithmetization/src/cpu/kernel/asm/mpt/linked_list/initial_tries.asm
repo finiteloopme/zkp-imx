@@ -39,6 +39,7 @@ skip:
     %jump(mpt_set_payload)
 %%after:
     // We store account_ptr_ptr - 1, i.e. a pointer to the first node not in the initial state
+    %decrement
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
     POP
 %endmacro
@@ -55,7 +56,7 @@ global mpt_set_storage_payload:
 
     DUP1 %eq_const(@MPT_NODE_EMPTY)     %jumpi(storage_skip)
     DUP1 %eq_const(@MPT_NODE_BRANCH)    %jumpi(set_payload_storage_branch)
-    DUP1 %eq_const(@MPT_NODE_EXTENSION) %jumpi(set_payload_extension)
+    DUP1 %eq_const(@MPT_NODE_EXTENSION) %jumpi(set_payload_storage_extension)
     DUP1 %eq_const(@MPT_NODE_LEAF)      %jumpi(set_payload_storage_leaf)
 
 storage_skip:
@@ -78,9 +79,9 @@ set_payload_branch:
         %stack
         (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr) -> 
         (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, child_ptr_ptr)
-        // stack: child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+        // stack: child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, child_ptr_ptr, retdest
         %mload_trie_data
-        // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, %%after_encode, child_ptr_ptr, retdest
+        // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, child_ptr_ptr, retdest
         %mpt_set_payload
         // stack: account_ptr_ptr', storage_ptr_ptr', child_ptr_ptr, retdest
         SWAP1
@@ -113,12 +114,19 @@ set_payload_storage_branch:
     JUMP
 
 set_payload_extension:
-    // stack: node_type, after_node_type, (account_ptr_ptr,) storage_ptr_ptr, retdest
+    // stack: node_type, after_node_type, storage_ptr_ptr, retdest
+    POP
+    // stack: after_node_type, storage_ptr_ptr, retdest
+    %add_const(2) %mload_trie_data
+    // stack: child_ptr, after_node_type, storage_ptr_ptr, retdest
+    %jump(mpt_set_payload)
+set_payload_storage_extension:
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     POP
     // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     %add_const(2) %mload_trie_data
-    // stack: child_ptr, (account_ptr_ptr,) storage_ptr_ptr, retdest
-    %jump(mpt_set_payload)
+    // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    %jump(mpt_set_storage_payload)
 
 set_payload_leaf:
     // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
