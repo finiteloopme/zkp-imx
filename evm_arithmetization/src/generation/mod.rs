@@ -231,6 +231,15 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
 
+    log::debug!(
+        "Final accounts linked list: {:?}",
+        state.get_accounts_linked_list()
+    );
+    log::debug!(
+        "Final storage linked list: {:?}",
+        state.get_storage_linked_list()
+    );
+
     if cpu_res.is_err() {
         let _ = output_debug_tries(&state);
 
@@ -240,14 +249,6 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     log::info!(
         "Trace lengths (before padding): {:?}",
         state.traces.get_lengths()
-    );
-    log::debug!(
-        "Final accounts linked list: {:?}",
-        state.get_accounts_linked_list()
-    );
-    log::debug!(
-        "Final storage linked list: {:?}",
-        state.get_storage_linked_list()
     );
 
     let read_metadata = |field| state.memory.read_global_metadata(field);

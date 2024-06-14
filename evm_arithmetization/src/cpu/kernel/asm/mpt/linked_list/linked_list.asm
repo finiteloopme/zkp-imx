@@ -408,7 +408,6 @@ global debug_store_new_payload:
     SWAP1
     DUP2
     // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-global debug_no_me_llamo_popotan:
     MSTORE_GENERAL
     // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
