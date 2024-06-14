@@ -564,19 +564,19 @@ impl<const D: usize> BlockBinopAggChildTarget<D> {
 
     fn public_values<F: RichField + Extendable<D>>(&self, builder: &mut CircuitBuilder<F, D>) -> Vec<Target>
     {
-        let agg_len = self.agg_proof.public_inputs.len();
-        let blk_len =  self.block_proof.public_inputs.len();
+        // let agg_len = self.agg_proof.public_inputs.len();
+        // let blk_len =  self.block_proof.public_inputs.len();
 
-        let longest = std::cmp::max( agg_len , blk_len) ;
-        let shortest = std::cmp::min( agg_len, blk_len );
-        let longer = if agg_len == longest {&self.agg_proof.public_inputs} else {&self.block_proof.public_inputs};
+        // let longest = std::cmp::max( agg_len , blk_len) ;
+        // let shortest = std::cmp::min( agg_len, blk_len );
+        // let longer = if agg_len == longest {&self.agg_proof.public_inputs} else {&self.block_proof.public_inputs};
 
         let mut res: Vec<_> = zip_eq(&self.agg_proof.public_inputs, &self.block_proof.public_inputs).map(
         |(&agg_pv, &block_pv)| builder.select( self.is_agg, agg_pv, block_pv)).collect();
 
-        if longest != shortest {
-            res.extend_from_slice(&longer[shortest..longest]);
-        }
+        // if longest != shortest {
+        //     res.extend_from_slice(&longer[shortest..longest]);
+        // }
         res
     }
 }
@@ -2144,15 +2144,18 @@ where
             &self.two_to_one_block_binop.circuit.verifier_only,
         );
 
-        let lhs_pv_hash = C::InnerHasher::hash_no_pad(&lhs.public_inputs);
-        let rhs_pv_hash = C::InnerHasher::hash_no_pad(&rhs.public_inputs);
-        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+        // let lhs_pv_hash = C::InnerHasher::hash_no_pad(&lhs.public_inputs);
+        // let rhs_pv_hash = C::InnerHasher::hash_no_pad(&rhs.public_inputs);
+        // //let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+        // let mut mix_vec: Vec<F> = vec![];
+        // mix_vec.extend(&lhs_pv_hash.elements);
+        // mix_vec.extend(&rhs_pv_hash.elements);
+        // let mix_pv_hash = C::InnerHasher::hash_no_pad(&mix_vec);
 
         // set hashes
-        witness.set_hash_target(self.two_to_one_block_binop.lhs.pv_hash, lhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block_binop.rhs.pv_hash, rhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block_binop.mix_pv_hash, mix_pv_hash);
-
+        //witness.set_hash_target(self.two_to_one_block_binop.lhs.pv_hash, lhs_pv_hash);
+        //witness.set_hash_target(self.two_to_one_block_binop.rhs.pv_hash, rhs_pv_hash);
+        //witness.set_hash_target(self.two_to_one_block_binop.mix_pv_hash, mix_pv_hash);
 
         // prove
         let proof = self.two_to_one_block_binop.circuit.prove(witness)?;
@@ -2181,12 +2184,12 @@ where
     ) -> BlockBinopAggChildTarget<D> {
         let count_public_inputs = builder.num_public_inputs();
         let block_common = &block.circuit.common;
-        let agg_common = builder.config.to_owned();
         let block_vk = builder.constant_verifier_data(&block.circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
+        //let agg_common = builder.config.to_owned();
         let agg_proof = builder.add_virtual_proof_with_pis(block_common);
         let block_proof = builder.add_virtual_proof_with_pis(block_common);
-        let pv_hash = builder.add_virtual_hash();
+        let pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(agg_proof.public_inputs.to_owned());
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg, &agg_proof, &block_proof, &block_vk, block_common,
@@ -2214,30 +2217,24 @@ where
 
         let mut builder = CircuitBuilder::<F, D>::new(block.circuit.common.config.clone());
 
-        let mix_pv_hash = builder.add_virtual_hash_public_input();
         /// PublicInput: hash(pv0), hash(pv1), pv01_hash
+        let mix_pv_hash = builder.add_virtual_hash_public_input();
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         // making sure we do not add public inputs after this point
         let count_public_inputs = builder.num_public_inputs();
         let lhs = Self::add_block_agg_child(&mut builder, &block);
         let rhs = Self::add_block_agg_child(&mut builder, &block);
 
-        let lhs_public_values = lhs.public_values(&mut builder);
-        let rhs_public_values = rhs.public_values(&mut builder);
+        let mut mix_vec = vec![];
+        mix_vec.extend(&lhs.pv_hash.elements);
+        mix_vec.extend(&rhs.pv_hash.elements);
+        let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
-        let lhs_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(lhs_public_values);
-        let rhs_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(rhs_public_values);
+        //builder.connect_hashes(lhs.pv_hash, lhs_hash_circuit);
+        //builder.connect_hashes(rhs.pv_hash, rhs_hash_circuit);
+        builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
 
-        let mut pv01_vec = vec![];
-        pv01_vec.extend(&lhs_hash_circuit.elements);
-        pv01_vec.extend(&rhs_hash_circuit.elements);
-        let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(pv01_vec);
-
-        builder.connect_hashes(lhs.pv_hash, lhs_hash_circuit);
-        builder.connect_hashes(rhs.pv_hash, rhs_hash_circuit);
-        //builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
-
-        // Pad to match the root circuit's degree.
+        // Pad to match the block circuit's degree.
         log::info!("Before padding:  TwoToOneBlockBinop: {} vs Block: {}.", builder.num_gates(),  block.circuit.common.degree_bits());
         while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
