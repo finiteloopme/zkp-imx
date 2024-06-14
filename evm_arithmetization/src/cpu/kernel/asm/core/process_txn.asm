@@ -86,15 +86,15 @@ global warm_origin:
 
 global warm_precompiles:
     // Add precompiles to accessed addresses.
-    PUSH @ECREC %insert_accessed_addresses_no_return
-    PUSH @SHA256 %insert_accessed_addresses_no_return
-    PUSH @RIP160 %insert_accessed_addresses_no_return
-    PUSH @ID %insert_accessed_addresses_no_return
-    PUSH @EXPMOD %insert_accessed_addresses_no_return
-    PUSH @BN_ADD %insert_accessed_addresses_no_return
-    PUSH @BN_MUL %insert_accessed_addresses_no_return
-    PUSH @SNARKV %insert_accessed_addresses_no_return
-    PUSH @BLAKE2_F %insert_accessed_addresses_no_return
+    PUSH @ECREC %insert_accessed_precompile_no_return
+    PUSH @SHA256 %insert_accessed_precompile_no_return
+    PUSH @RIP160 %insert_accessed_precompile_no_return
+    PUSH @ID %insert_accessed_precompile_no_return
+    PUSH @EXPMOD %insert_accessed_precompile_no_return
+    PUSH @BN_ADD %insert_accessed_precompile_no_return
+    PUSH @BN_MUL %insert_accessed_precompile_no_return
+    PUSH @SNARKV %insert_accessed_precompile_no_return
+    PUSH @BLAKE2_F %insert_accessed_precompile_no_return
 
 // EIP-3651
 global warm_coinbase:

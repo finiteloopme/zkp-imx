@@ -92,7 +92,8 @@ global init_linked_lists:
     %mul_const(4)
 %endmacro
 
-/// Inserts the account addr and payload pointer into the linked list if it is not already present.
+/// Inserts the account addr and payload pointer into the linked list if it is not already present, or modify the payload
+/// otherwise.
 /// Return `access_ctr_ptr, 1, payload_ptr` if the account was inserted, `access_ctr_ptr, 1, original_ptr` if it was already present
 /// and this is the first access, or `access_ctr_ptr, 0, original_ptr` if it was already present and accessed.
 global insert_account_to_linked_list:
@@ -135,6 +136,9 @@ account_found:
     MLOAD_GENERAL
     // stack: orig_payload_ptr, pred_ptr + 1, addr, payload_ptr, retdest
     SWAP1
+    DUP1
+    DUP5
+    MSTORE_GENERAL
     %increment
     // stack: pred_ptr + 2, orig_payload_ptr, addr, payload_ptr, retdest
     DUP1
@@ -246,7 +250,7 @@ global search_account:
     %add_const(3)
     MLOAD_GENERAL
     // stack: ptr, pred_ptr, addr, payload_ptr, retdest
-    %jump_neq_const(@U256_MAX, account_found)
+    %jump_neq_const(@U256_MAX, account_found_no_write)
     // The storage key is not in the list.
     PANIC
 
@@ -255,6 +259,25 @@ account_not_found:
     %pop3
     %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
     // stack: retdest, access_ctr_ptr, cold_access, payload_ptr, retdest
+    JUMP
+
+account_found_no_write:
+    // The address was already in the list
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    // Load the the payload pointer and access counter
+    %increment
+    DUP1
+    MLOAD_GENERAL
+    // stack: orig_payload_ptr, pred_ptr + 1, addr, payload_ptr, retdest
+    SWAP1
+    %increment
+    // stack: pred_ptr + 2, orig_payload_ptr, addr, payload_ptr, retdest
+    DUP1
+    MLOAD_GENERAL
+    // stack: access_ctr, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest
+    // If access_ctr == 0 then this it's a cold access 
+    ISZERO
+    %stack (cold_access, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, access_ctr_ptr, cold_access, orig_payload_ptr)
     JUMP
 
 %macro remove_account_from_linked_list

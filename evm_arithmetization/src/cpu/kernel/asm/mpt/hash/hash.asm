@@ -51,6 +51,7 @@ mpt_hash_hash_rlp_after_unpacking:
 // Post stack: result, result_len, cur_len
 global encode_or_hash_node:
     DUP1 %mload_trie_data
+global debug_node_type:
 
     // Check if we're dealing with a concrete node, i.e. not a hash node.
     // stack: node_type, node_ptr, encode_value, cur_len, retdest
@@ -101,6 +102,7 @@ after_packed_small_rlp:
 //
 // Pre stack: node_type, node_ptr, encode_value, cur_len, retdest
 // Post stack: result_ptr, result_len, cur_len
+global debug_encode_node:
 encode_node:
     // stack: node_type, node_ptr, encode_value, cur_len, retdest
     // Increment node_ptr, so it points to the node payload instead of its type.
@@ -114,6 +116,7 @@ encode_node:
 
     // If we got here, node_type is either @MPT_NODE_HASH, which should have
     // been handled earlier in encode_or_hash_node, or something invalid.
+global debug_no_puede_sel_senol:
     PANIC
 
 global encode_node_empty:

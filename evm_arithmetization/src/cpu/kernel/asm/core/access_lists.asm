@@ -110,7 +110,10 @@ global init_access_lists:
 %endmacro
 
 %macro insert_accessed_addresses
-    %stack (addr) -> (addr, %%after)
+// TODO: The 0 is comming from the previous
+// PUSH 0  at the beggining of insert_accessed_addresses, which is
+// now different for precompiles
+    %stack (addr) -> (0, addr, %%after)
     %jump(insert_accessed_addresses)
 %%after:
     // stack: cold_access
@@ -118,6 +121,18 @@ global init_access_lists:
 
 %macro insert_accessed_addresses_no_return
     %insert_accessed_addresses
+    POP
+%endmacro
+
+%macro insert_accessed_precompile
+    %stack (addr) -> (@U256_MAX, addr, %%after)
+    %jump(insert_accessed_addresses)
+%%after:
+    // stack: cold_access
+%endmacro
+
+%macro insert_accessed_precompile_no_return
+    %insert_accessed_precompile
     POP
 %endmacro
 
@@ -141,7 +156,7 @@ global init_access_lists:
 
 global insert_accessed_addresses:
     // stack: addr, retdest
-    PUSH 0 DUP2 %addr_to_state_key
+    DUP2 %addr_to_state_key
     // stack: addr_key, payload_ptr, addr, retdest
     %insert_account_to_linked_list
     // stack: access_ctr_ptr, cold_access, account_ptr, addr

@@ -12,12 +12,13 @@ global insert_all_accounts:
     DUP1
     %eq_const(@U256_MAX)
     %jumpi(no_more_accounts)
-global debug_next_account:
     DUP4
     %increment
-global debug_before_loading_account_ptr:
     MLOAD_GENERAL
     // stack: account_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
+    DUP1
+    %eq_const(@U256_MAX)
+    %jumpi(skip_precompile)
     %add_const(2)
     DUP1
 global debug_before_loading_storage_root_ptr:
@@ -27,7 +28,6 @@ global debug_before_loading_storage_root_ptr:
         (storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr) ->
         (key, storage_ptr_ptr, storage_root_ptr, after_insert_all_slots, storage_root_ptr_ptr, key)
     %jump(insert_all_slots)
-global debug_after_insert_all_slots:
 after_insert_all_slots:
     // stack: storage_ptr_ptr', storage_root_ptr', storage_root_ptr_ptr, key, root_ptr, account_ptr_ptr, retdest
     SWAP2
@@ -51,6 +51,13 @@ no_more_accounts:
     // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %stack (key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest) ->(retdest, root_ptr)
     JUMP
+
+skip_precompile:
+    // stack: account_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
+    %pop2
+    SWAP2
+    %next_account
+    %jump(insert_all_accounts)
 
 // Insert all slots before the account key changes
 // Pre stack: addr, storage_ptr_ptr, root_ptr, retdest
