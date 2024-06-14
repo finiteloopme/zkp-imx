@@ -441,6 +441,7 @@ impl<F: Field> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
     fn run_next_insert_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
+        log::debug!("accounts ll = {:?}", self.get_accounts_linked_list());
         if let Some((([.., pred_ptr], [node_addr, ..]), _)) = self
             .get_accounts_linked_list()?
             .zip(self.get_accounts_linked_list()?.skip(1))

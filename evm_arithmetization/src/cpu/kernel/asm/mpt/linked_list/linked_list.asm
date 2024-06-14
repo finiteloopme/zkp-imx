@@ -579,7 +579,6 @@ slot_found_no_write:
     %stack (cold_access, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, access_ctr_ptr, cold_access, orig_payload_ptr)
     JUMP
 
-
 %macro remove_slot
     %stack (addr, key) -> (addr, key, %%after)
     %jump(remove_slot)
