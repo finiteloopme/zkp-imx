@@ -114,7 +114,7 @@ global init_access_lists:
 // PUSH 0  at the beggining of insert_accessed_addresses, which is
 // now different for precompiles
     %stack (addr) -> (0, addr, %%after)
-    %jump(insert_accessed_addresses)
+    %jump(search_accessed_addresses)
 %%after:
     // stack: cold_access
 %endmacro
@@ -155,12 +155,31 @@ global init_access_lists:
 %endmacro
 
 global insert_accessed_addresses:
-    // stack: addr, retdest
+    // stack: payload_ptr, addr, retdest
     DUP2 %addr_to_state_key
     // stack: addr_key, payload_ptr, addr, retdest
     %insert_account_to_linked_list
     // stack: access_ctr_ptr, cold_access, account_ptr, addr
     DUP1 %assert_nonzero
+    // Update the access counter in linked lists.
+    DUP1 MLOAD_GENERAL
+    %increment
+    // stack: access_ctr + 1, access_ctr_ptr, cold_access, account_ptr, addr
+    MSTORE_GENERAL
+    %stack (cold_access, account_ptr, addr, retdest) -> (addr, retdest, cold_access)
+    %journal_add_account_loaded
+    // stack: retdest, cold_access
+    JUMP
+
+global search_accessed_addresses:
+    // stack: payload_ptr, addr, retdest
+    DUP2 %addr_to_state_key
+    // stack: addr_key, payload_ptr, addr, retdest
+    %search_account
+    // stack: access_ctr_ptr, cold_access, account_ptr, addr
+    DUP1 
+global debug_the_counter_cant_be_zero:
+    %assert_nonzero
     // Update the access counter in linked lists.
     DUP1 MLOAD_GENERAL
     %increment

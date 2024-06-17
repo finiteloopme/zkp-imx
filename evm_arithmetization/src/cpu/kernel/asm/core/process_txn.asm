@@ -99,6 +99,7 @@ global warm_precompiles:
 // EIP-3651
 global warm_coinbase:
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BENEFICIARY)
+global debug_inserting_block_beneficiary:
     %insert_accessed_addresses_no_return
 
 global process_based_on_type:
@@ -225,7 +226,9 @@ global process_message_txn:
     // stack: retdest
     %mload_txn_field(@TXN_FIELD_VALUE)
     %mload_txn_field(@TXN_FIELD_TO)
-    DUP1 %insert_accessed_addresses_no_return
+    DUP1 
+global debug_esta_es_la_madre_del_cordero:
+    %insert_accessed_addresses_no_return
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     // stack: from, to, amount, retdest
     %transfer_eth
