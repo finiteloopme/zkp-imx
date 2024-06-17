@@ -175,11 +175,17 @@ global search_accessed_addresses:
     // stack: payload_ptr, addr, retdest
     DUP2 %addr_to_state_key
     // stack: addr_key, payload_ptr, addr, retdest
-    %search_account
-    // stack: access_ctr_ptr, cold_access, account_ptr, addr
+    SWAP1 DUP2 %search_account
+    // stack: access_ctr_ptr, cold_access, account_ptr, addr_key, addr
     DUP1 
 global debug_the_counter_cant_be_zero:
-    %assert_nonzero
+    // stack: access_ctr_ptr, access_ctr_ptr, cold_access, account_ptr, addr_key, addr
+    // %assert_nonzero
+    ISZERO %jumpi(insert_new_account_in_state_trie)
+
+    // stack: access_ctr_ptr, cold_access, account_ptr, addr_key, addr
+    %stack (access_ctr_ptr, cold_access, account_ptr, addr_key) -> (access_ctr_ptr, cold_access, account_ptr)
+global update_access_counter_ll:
     // Update the access counter in linked lists.
     DUP1 MLOAD_GENERAL
     %increment
@@ -189,6 +195,24 @@ global debug_the_counter_cant_be_zero:
     %journal_add_account_loaded
     // stack: retdest, cold_access
     JUMP
+
+global insert_new_account_in_state_trie:
+    // stack: access_ctr_ptr, cold_access, account_ptr, addr_key, addr
+    %pop3
+    %get_trie_data_size // pointer to new account we're about to create
+    // stack: new_account_ptr, addr_key, addr, retdest
+    PUSH 0 %append_to_trie_data // nonce
+    PUSH 0 %append_to_trie_data // balance
+    PUSH 0 %append_to_trie_data // storage root pointer
+    PUSH @EMPTY_STRING_HASH %append_to_trie_data // code hash
+    // stack: new_account_ptr, addr_key, addr, retdest
+    DUP2 %mpt_insert_state_trie
+    // stack: addr_key, addr, retdest
+    // The payload_ptr does not matter because the account is going to be found, since we just inserted it.
+    PUSH 0 SWAP1 
+    %search_account
+    // stack: access_ctr_ptr, cold_access, account_ptr, addr
+    %jump(update_access_counter_ll)
 
 /// Inserts the address into the access list if it is not already present.
 /// Return 1 if the address was inserted, 0 if it was already present.
