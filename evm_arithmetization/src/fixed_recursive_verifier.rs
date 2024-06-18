@@ -2225,6 +2225,7 @@ where
 
         // let faux_public_values = add_virtual_public_values(&mut builder);
 
+        // magic numbers derived from failing assertion at end of this function.
         while builder.num_public_inputs() < block.circuit.common.num_public_inputs-(2337-2269) {
             builder.add_virtual_public_input();
         }
@@ -2233,13 +2234,15 @@ where
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         // making sure we do not add public inputs after this point
         let count_public_inputs = builder.num_public_inputs();
+
         let lhs = Self::add_block_agg_child(&mut builder, &block);
         let rhs = Self::add_block_agg_child(&mut builder, &block);
 
         // let mut mix_vec = vec![];
         // mix_vec.extend(&lhs.pv_hash.elements);
         // mix_vec.extend(&rhs.pv_hash.elements);
-        // let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        // let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        let mix_pv_hash = builder.constant_hash(HashOut::ZERO);
 
         //builder.connect_hashes(lhs.pv_hash, lhs_hash_circuit);
         //builder.connect_hashes(rhs.pv_hash, rhs_hash_circuit);
@@ -2263,6 +2266,7 @@ where
 
         assert_eq!(count_public_inputs, builder.num_public_inputs());
         assert_eq!(block.circuit.common.num_public_inputs, builder.num_public_inputs(), "Block aggregation circuit and block base case circuit must have same number of public inputs.");
+        dbg!("Now attempting to build circuit.");
         let circuit = builder.build::<C>();
         TwoToOneBlockBinopAggCircuitData {
             circuit,
