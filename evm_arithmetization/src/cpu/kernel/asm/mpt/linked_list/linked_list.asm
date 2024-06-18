@@ -584,6 +584,7 @@ slot_not_found:
         -> (retdest, 0, 1, payload_ptr)
     JUMP
 
+global debug_slot_found_no_write:
 slot_found_no_write:
     // The slot was already in the list
     // stack: pred_ptr, addr, key, payload_ptr, retdest

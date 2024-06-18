@@ -346,7 +346,7 @@ global remove_accessed_addresses:
     // increased it when searching for the account.
     DUP1 MLOAD_GENERAL
     // stack: counter, counter_ptr. retdest
-    %assert_gt_const(0)
+    DUP1 %assert_gt_const(0)
     %sub_const(1) MSTORE_GENERAL
     // stack: retdest
     JUMP
@@ -558,7 +558,11 @@ global remove_accessed_storage_keys:
     // stack: addr, slot, retdest
     %read_slot_linked_list_return_ctr_ptr
     // stack: slot_ctr_ptr, retdest
-    DUP1 %assert_nonzero
+    DUP1 %jumpi(slot_not_already_removed)
+    // stack: slot_ctr_ptr, retdest
+    POP JUMP
+
+global slot_not_already_removed:
     // stack: slot_ctr_ptr, retdest
     DUP1 MLOAD_GENERAL
     // stack: slot_ctr, slot_ctr_ptr, retdest

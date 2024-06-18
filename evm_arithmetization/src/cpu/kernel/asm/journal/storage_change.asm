@@ -41,6 +41,7 @@ delete_original:
     // stack: addr_key, slot_key, retdest
     %jump(remove_slot)
 
+global deleting:
 delete:
     // stack: address, slot, prev_value, retdest
     SWAP2 POP
