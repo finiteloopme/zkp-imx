@@ -798,8 +798,13 @@ where
         let aggregation = Self::create_aggregation_circuit(&root);
         let two_to_one_aggregation = Self::create_two_to_one_agg_circuit(&aggregation);
         let block = Self::create_block_circuit(&aggregation);
+
+        dbg!(&block.circuit.common, &aggregation.circuit.common);
         //let two_to_one_block_ivc = Self::create_two_to_one_block_circuit_ivc(&block);
-        let two_to_one_block_binop = Self::create_two_to_one_block_circuit_binop(&block);
+        let two_to_one_block_binop = Self::create_two_to_one_block_circuit_binop(&by_table, &block);
+
+        dbg!(&block.circuit.common, &two_to_one_block_binop.circuit.common);
+
         Self {
             root,
             aggregation,
@@ -2206,6 +2211,7 @@ where
 
     /// Follows the structure of [`create_block_circuit`]
     fn create_two_to_one_block_circuit_binop(
+        by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         block: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockBinopAggCircuitData<F, C, D>
     where
@@ -2217,38 +2223,46 @@ where
 
         let mut builder = CircuitBuilder::<F, D>::new(block.circuit.common.config.clone());
 
+        // let faux_public_values = add_virtual_public_values(&mut builder);
+
+        while builder.num_public_inputs() < block.circuit.common.num_public_inputs-(2337-2269) {
+            builder.add_virtual_public_input();
+        }
         /// PublicInput: hash(pv0), hash(pv1), pv01_hash
-        let mix_pv_hash = builder.add_virtual_hash_public_input();
+        // let mix_pv_hash = builder.add_virtual_hash_public_input();
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         // making sure we do not add public inputs after this point
         let count_public_inputs = builder.num_public_inputs();
         let lhs = Self::add_block_agg_child(&mut builder, &block);
         let rhs = Self::add_block_agg_child(&mut builder, &block);
 
-        let mut mix_vec = vec![];
-        mix_vec.extend(&lhs.pv_hash.elements);
-        mix_vec.extend(&rhs.pv_hash.elements);
-        let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        // let mut mix_vec = vec![];
+        // mix_vec.extend(&lhs.pv_hash.elements);
+        // mix_vec.extend(&rhs.pv_hash.elements);
+        // let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
         //builder.connect_hashes(lhs.pv_hash, lhs_hash_circuit);
         //builder.connect_hashes(rhs.pv_hash, rhs_hash_circuit);
-        builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
+        //builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
 
         // Pad to match the block circuit's degree.
         log::info!("Before padding:  TwoToOneBlockBinop: {} vs Block: {}.", builder.num_gates(),  block.circuit.common.degree_bits());
-        while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
-            builder.add_gate(NoopGate, vec![]);
-        }
+        // while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
+        //     builder.add_gate(NoopGate, vec![]);
+        // }
         log::info!("After padding:  TwoToOneBlockBinop: {} vs Block: {}.", builder.num_gates(),  block.circuit.common.degree_bits());
 
-        assert_eq!(count_public_inputs, builder.num_public_inputs());
         log::info!("Expected: {}, actual: {}", block.circuit.common.num_public_inputs, builder.num_public_inputs());
 
-        while builder.num_public_inputs() < block.circuit.common.num_public_inputs {
-            builder.add_virtual_public_input();
-        }
+        // let inner_common_data: [_; NUM_TABLES] =
+        //     core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
+        // builder.add_gate(
+        //     ConstantGate::new(inner_common_data[0].config.num_constants),
+        //     vec![],
+        // );
 
-        assert_eq!(block.circuit.common.num_public_inputs, builder.num_public_inputs());
+        assert_eq!(count_public_inputs, builder.num_public_inputs());
+        assert_eq!(block.circuit.common.num_public_inputs, builder.num_public_inputs(), "Block aggregation circuit and block base case circuit must have same number of public inputs.");
         let circuit = builder.build::<C>();
         TwoToOneBlockBinopAggCircuitData {
             circuit,
