@@ -41,9 +41,24 @@ global delete_account_save:
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     JUMP
 
+global delete_account_linked_list:
+    // stack: address, retdest
+    %addr_to_state_key
+    // stack: key, retdest
+    %remove_account_from_linked_list
+    // stack: retdest
+    JUMP
+
 %macro delete_account
     %stack (address) -> (address, %%after)
     %jump(delete_account)
+%%after:
+    // stack: (empty)
+%endmacro
+
+%macro delete_account_linked_list
+    %stack (address) -> (address, %%after)
+    %jump(delete_account_linked_list)
 %%after:
     // stack: (empty)
 %endmacro

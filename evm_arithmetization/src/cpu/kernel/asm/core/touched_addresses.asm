@@ -97,7 +97,7 @@ delete_all_touched_addresses_loop:
     POP %increment %jump(delete_all_touched_addresses_loop)
 bingo:
     // stack: loaded_addr, i, len, retdest
-    %delete_account
+    %delete_account_linked_list
     %increment %jump(delete_all_touched_addresses_loop)
 delete_all_touched_addresses_done:
     // stack: i, len, retdest
