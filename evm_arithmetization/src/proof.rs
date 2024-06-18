@@ -55,6 +55,11 @@ pub struct PublicValues {
 }
 
 impl PublicValues {
+    pub const SIZE: usize = TrieRootsTarget::SIZE * 2
+        + BlockMetadataTarget::SIZE
+        + BlockHashesTarget::SIZE
+        + ExtraBlockDataTarget::SIZE;
+
     /// Extracts public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
