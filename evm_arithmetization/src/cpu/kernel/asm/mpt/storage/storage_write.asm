@@ -11,10 +11,11 @@ global sys_sstore:
     %address
     %stack (addr, current_value, kexit_info, slot, value) -> (addr, slot, current_value, kexit_info, slot, value)
     %insert_accessed_storage_keys
+global debug_cold_access_sstore:
     // stack: cold_access, value_ptr, current_value, kexit_info, slot, value
     %jumpi(sstore_cold_access)
     // stack: value_ptr, current_value, kexit_info, slot, value
-    MLOAD_GENERAL
+    %mload_trie_data
     // stack: original_value, current_value, kexit_info, slot, value
     PUSH 0
     // stack: gas, original_value, current_value, kexit_info, slot, value
@@ -32,6 +33,7 @@ sstore_after_cold_access_check:
     // Check for warm access.
     %stack (gas, original_value, current_value, kexit_info, slot, value) ->
         (value, current_value, current_value, original_value, gas, original_value, current_value, kexit_info, slot, value)
+global debug_value_current_value_original_value:
     EQ SWAP2 EQ ISZERO
     // stack: current_value==original_value, value==current_value, gas, original_value, current_value, kexit_info, slot, value)
     ADD // OR
@@ -46,6 +48,7 @@ sstore_after_cold_access_check:
     DUP2 ISZERO ISZERO %mul_const(@GAS_SRESET) ADD
     %jump(sstore_charge_gas)
 
+global debug_sstore_wam:
 sstore_warm:
     // stack: gas, original_value, current_value, kexit_info, slot, value)
     %add_const(@GAS_WARMACCESS)

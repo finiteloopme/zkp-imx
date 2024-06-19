@@ -341,7 +341,7 @@ global remove_account:
 
 %macro insert_slot_return_ptr
     %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
-    %jump(insert_slot)
+    %jump(insert_slot_no_overwrite)
 %%after:
     // stack: access_ctr_ptr, cold_access, value_ptr
 %endmacro
@@ -525,6 +525,55 @@ global debug_yo_no_me_llamo_javier:
     // stack: new_ctr_ptr, addr, key, payload_ptr, retdest
     %stack (new_ctr_ptr, addr, key, payload_ptr, retdest) -> (retdest, new_ctr_ptr, 1, payload_ptr)
     JUMP
+
+/// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
+/// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
+/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+global insert_slot_no_overwrite:
+    // stack: addr, key, payload_ptr, retdest
+    PROVER_INPUT(linked_list::insert_slot)
+    // stack: pred_ptr/5, addr, key, payload_ptr, retdest
+    %get_valid_slot_ptr
+
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    DUP1
+    MLOAD_GENERAL
+    DUP1
+    // stack: pred_addr, pred_addr, pred_ptr, addr, key, payload_ptr, retdest
+    DUP4 
+    GT
+    DUP3 %eq_const(@SEGMENT_STORAGE_LINKED_LIST)
+    ADD // OR
+    // If the predesessor is strictly smaller or the predecessor is the special
+    // node with key @U256_MAX (and hence we're inserting a new minimum), then
+    // we need to insert a new node.
+    %jumpi(insert_new_slot)
+    // stack: pred_addr, pred_ptr, addr, key, payload_ptr, retdest
+    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
+    DUP3
+    %assert_eq
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    DUP1
+    %increment
+    MLOAD_GENERAL
+    // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    DUP1 DUP5
+    GT
+    %jumpi(insert_new_slot)
+    // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    DUP4
+    // We know that key <= pred_key. It must hold that pred_key == key.
+    %assert_eq
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    // Check that this is not a deleted node
+    DUP1
+    %add_const(4)
+    MLOAD_GENERAL
+    %jump_neq_const(@U256_MAX, slot_found_no_write)
+    // The storage key is not in the list.
+    PANIC
 
 /// Search the pair (address, storage_key) in the storage the linked list.
 /// Returns `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
