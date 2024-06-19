@@ -20,7 +20,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{
     CircuitConfig, CircuitData, CommonCircuitData, VerifierCircuitData, VerifierCircuitTarget,
 };
-use plonky2::plonk::config::{Hasher, AlgebraicHasher, GenericConfig};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut, Hasher};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::recursion::dummy_circuit::cyclic_base_proof;
@@ -2280,6 +2280,69 @@ where
             //mix_pv_hash,
             cyclic_vk,
         }
+    }
+
+    /// Used in the case of a non aggregation transaction child.
+    /// Creates dummy public inputs to set the cyclic vk to the aggregation
+    /// circuit values, so that both aggregation and non-aggregation parts
+    /// of the child share the same vk. This is possible because only the
+    /// aggregation inner circuit is checked against its vk.
+    fn set_dummy_proof_with_cyclic_vk_pis(
+        circuit_agg: &CircuitData<F, C, D>,
+        witness: &mut PartialWitness<F>,
+        agg_proof: &ProofWithPublicInputsTarget<D>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) {
+        let ProofWithPublicInputs {
+            proof,
+            public_inputs,
+        } = proof;
+        let ProofWithPublicInputsTarget {
+            proof: proof_targets,
+            public_inputs: pi_targets,
+        } = agg_proof;
+
+        // The proof remains the same.
+        witness.set_proof_target(proof_targets, proof);
+
+        let num_pis = circuit_agg.common.num_public_inputs;
+        let mut dummy_pis = vec![F::ZERO; num_pis];
+        let cyclic_verifying_data = &circuit_agg.verifier_only;
+        let mut cyclic_vk = cyclic_verifying_data.circuit_digest.to_vec();
+        cyclic_vk.append(&mut cyclic_verifying_data.constants_sigmas_cap.flatten());
+
+        let cyclic_vk_len = cyclic_vk.len();
+        for i in 0..cyclic_vk_len {
+            dummy_pis[num_pis - cyclic_vk_len + i] = cyclic_vk[i];
+        }
+
+        // Set dummy public inputs.
+        for (&pi_t, pi) in pi_targets.iter().zip_eq(dummy_pis) {
+            witness.set_target(pi_t, pi);
+        }
+    }
+
+    /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
+    /// so that it corresponds to the aggregation cyclic vk.
+    fn set_dummy_if_necessary(
+        agg_child: &AggregationChildTarget<D>,
+        is_agg: bool,
+        circuit: &CircuitData<F, C, D>,
+        agg_inputs: &mut PartialWitness<F>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
+        if is_agg {
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+        } else {
+            Self::set_dummy_proof_with_cyclic_vk_pis(
+                circuit,
+                agg_inputs,
+                &agg_child.agg_proof,
+                proof,
+            )
+        }
+        agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
     }
 }
 /// A map between initial degree sizes and their associated shrinking recursion
