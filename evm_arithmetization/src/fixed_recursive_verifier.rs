@@ -2132,11 +2132,15 @@ where
 
         witness.set_bool_target(self.two_to_one_block_binop.lhs.is_agg, lhs_is_agg);
         witness.set_proof_with_pis_target(&self.two_to_one_block_binop.lhs.agg_proof,lhs);
-        witness.set_proof_with_pis_target(&self.two_to_one_block_binop.lhs.block_proof,lhs);
+        Self::set_dummy_if_necessary( &self.two_to_one_block_binop.lhs, lhs_is_agg, &self.two_to_one_block_binop.circuit, &mut witness, &lhs);
+        // witness.set_proof_with_pis_target(&self.two_to_one_block_binop.lhs.block_proof,lhs);
 
         witness.set_bool_target(self.two_to_one_block_binop.rhs.is_agg, rhs_is_agg);
-        witness.set_proof_with_pis_target(&self.two_to_one_block_binop.rhs.agg_proof,rhs);
-        witness.set_proof_with_pis_target(&self.two_to_one_block_binop.rhs.block_proof,rhs);
+        witness.set_proof_with_pis_target(&self.two_to_one_block_binop.rhs.agg_proof, rhs);
+        Self::set_dummy_if_necessary( &self.two_to_one_block_binop.rhs, rhs_is_agg, &self.two_to_one_block_binop.circuit, &mut witness, &rhs);
+        // witness.set_proof_with_pis_target(&self.two_to_one_block_binop.rhs.block_proof,rhs);
+
+
 
         witness.set_verifier_data_target(
             &self.two_to_one_block_binop.cyclic_vk,
@@ -2325,7 +2329,7 @@ where
     /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
     /// so that it corresponds to the aggregation cyclic vk.
     fn set_dummy_if_necessary(
-        agg_child: &AggregationChildTarget<D>,
+        agg_child: &BlockBinopAggChildTarget<D>,
         is_agg: bool,
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
@@ -2342,7 +2346,7 @@ where
                 proof,
             )
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.block_proof, proof);
     }
 }
 /// A map between initial degree sizes and their associated shrinking recursion
