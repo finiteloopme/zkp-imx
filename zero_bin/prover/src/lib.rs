@@ -14,11 +14,7 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
-use trace_decoder::{
-    processed_block_trace::ProcessingMeta,
-    trace_protocol::BlockTrace,
-    types::{CodeHash, OtherBlockData},
-};
+use trace_decoder::{entrypoint, BlockTrace, OtherBlockData};
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
 
@@ -26,9 +22,6 @@ use zero_bin_common::fs::generate_block_proof_file_name;
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
-}
-fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
-    todo!()
 }
 
 impl BlockProverInput {
@@ -48,10 +41,7 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
 
         let other_data = self.other_data;
-        let txs = self.block_trace.into_txn_proof_gen_ir(
-            &ProcessingMeta::new(resolve_code_hash_fn),
-            other_data.clone(),
-        )?;
+        let txs = entrypoint(self.block_trace, other_data.clone(), |_| todo!())?;
 
         let agg_proof = IndexedStream::from(txs)
             .map(&TxProof {
