@@ -27,7 +27,7 @@ keccak-hash = { workspace = true }
 log = { workspace = true }
 mpt_trie = { workspace = true }
 nunny = { workspace = true, features = ["serde"] }
-plonky2.workspace = true
+plonky2 = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
