@@ -484,7 +484,8 @@ where
     pub circuit: CircuitData<F, C, D>,
     lhs: BlockBinopAggChildTarget<D>,
     rhs: BlockBinopAggChildTarget<D>,
-    //mix_pv_hash: HashOutTarget,
+    mix_pv_hash: HashOutTarget,
+    dummy_pis: Vec<Target>,
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -515,13 +516,14 @@ where
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let lhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
         let rhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
-        //let agg_pv_hash = buffer.read_target_hash()?;
+        let mix_pv_hash = buffer.read_target_hash()?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
             circuit,
             lhs,
             rhs,
-            //mix_pv_hash: agg_pv_hash,
+            mix_pv_hash,
+            dummy_pis: todo!(),
             cyclic_vk,
         })
     }
@@ -535,7 +537,7 @@ struct BlockBinopAggChildTarget<const D: usize>
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
     block_proof: ProofWithPublicInputsTarget<D>,
-    pv_hash: HashOutTarget,
+    //pv_hash: HashOutTarget,
 }
 
 
@@ -557,7 +559,7 @@ impl<const D: usize> BlockBinopAggChildTarget<D> {
             is_agg,
             agg_proof,
             block_proof,
-            pv_hash,
+            //pv_hash,
         })
     }
 
@@ -2130,36 +2132,38 @@ where
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut witness = PartialWitness::new();
 
-        witness.set_bool_target(self.two_to_one_block_binop.lhs.is_agg, lhs_is_agg);
-        witness.set_proof_with_pis_target(&self.two_to_one_block_binop.lhs.agg_proof,lhs);
-        Self::set_dummy_if_necessary( &self.two_to_one_block_binop.lhs, lhs_is_agg, &self.two_to_one_block_binop.circuit, &mut witness, &lhs);
-        // witness.set_proof_with_pis_target(&self.two_to_one_block_binop.lhs.block_proof,lhs);
+        // if lhs_is_agg && rhs_is_agg {
+            let junk_pis = &self.two_to_one_block_binop.dummy_pis;
+            witness.set_target_arr(&junk_pis , &vec![F::ZERO; junk_pis.len()]);
+        //}
 
-        witness.set_bool_target(self.two_to_one_block_binop.rhs.is_agg, rhs_is_agg);
-        witness.set_proof_with_pis_target(&self.two_to_one_block_binop.rhs.agg_proof, rhs);
-        Self::set_dummy_if_necessary( &self.two_to_one_block_binop.rhs, rhs_is_agg, &self.two_to_one_block_binop.circuit, &mut witness, &rhs);
-        // witness.set_proof_with_pis_target(&self.two_to_one_block_binop.rhs.block_proof,rhs);
+        Self::set_dummy_if_necessary(
+            &self.two_to_one_block_binop.lhs,
+            lhs_is_agg,
+            &self.two_to_one_block_binop.circuit,
+            &mut witness,
+            &lhs,
+        );
 
-
+        Self::set_dummy_if_necessary(
+            &self.two_to_one_block_binop.rhs,
+            rhs_is_agg,
+            &self.two_to_one_block_binop.circuit,
+            &mut witness,
+            &rhs,
+        );
 
         witness.set_verifier_data_target(
             &self.two_to_one_block_binop.cyclic_vk,
             &self.two_to_one_block_binop.circuit.verifier_only,
         );
-        dbg!(&self.two_to_one_block_binop.circuit.verifier_only);
+        //dbg!(&self.two_to_one_block_binop.circuit.verifier_only);
 
         let lhs_pv_hash = C::InnerHasher::hash_no_pad(&lhs.public_inputs);
         let rhs_pv_hash = C::InnerHasher::hash_no_pad(&rhs.public_inputs);
-        // //let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
-        // let mut mix_vec: Vec<F> = vec![];
-        // mix_vec.extend(&lhs_pv_hash.elements);
-        // mix_vec.extend(&rhs_pv_hash.elements);
-        // let mix_pv_hash = C::InnerHasher::hash_no_pad(&mix_vec);
+        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+        witness.set_hash_target(self.two_to_one_block_binop.mix_pv_hash, mix_pv_hash);
 
-        // set hashes
-        witness.set_hash_target(self.two_to_one_block_binop.lhs.pv_hash, lhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block_binop.rhs.pv_hash, rhs_pv_hash);
-        //witness.set_hash_target(self.two_to_one_block_binop.mix_pv_hash, mix_pv_hash);
 
         // prove
         let proof = self.two_to_one_block_binop.circuit.prove(witness)?;
@@ -2190,10 +2194,9 @@ where
         let block_common = &block.circuit.common;
         let block_vk = builder.constant_verifier_data(&block.circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
-        //let agg_common = builder.config.to_owned();
+        // block_common should be use for agg_proof because they are similar
         let agg_proof = builder.add_virtual_proof_with_pis(block_common);
         let block_proof = builder.add_virtual_proof_with_pis(block_common);
-        let pv_hash = builder.constant_hash(HashOut::ZERO);
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg, &agg_proof, &block_proof, &block_vk, block_common,
@@ -2204,11 +2207,10 @@ where
             is_agg,
             agg_proof,
             block_proof,
-            pv_hash,
+            // pv_hash,
         }
     }
 
-    /// Follows the structure of [`create_block_circuit`]
     fn create_two_to_one_block_circuit_binop(
         by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         block: &BlockCircuitData<F, C, D>,
@@ -2218,39 +2220,34 @@ where
         C: GenericConfig<D, F = F>,
         C::Hasher: AlgebraicHasher<F>,
     {
-        // Question: Do I need to adjust CommonCircuitData here like in [`create_block_circuit`]?
-
         let mut builder = CircuitBuilder::<F, D>::new(block.circuit.common.config.clone());
 
-        // let faux_public_values = add_virtual_public_values(&mut builder);
-
+        let mut padding_pis = vec![];
         // magic numbers derived from failing assertion at end of this function.
         while builder.num_public_inputs() < block.circuit.common.num_public_inputs-(2337-2269) {
-            builder.add_virtual_public_input();
+            let target = builder.add_virtual_public_input();
+            padding_pis.push(target);
         }
+
+        // let cap_len = block.public_values.mem_before.mem_cap.0.len();
         /// PublicInput: hash(pv0), hash(pv1), pv01_hash
         // let mix_pv_hash = builder.add_virtual_hash_public_input();
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         // making sure we do not add public inputs after this point
         let count_public_inputs = builder.num_public_inputs();
 
-        let lhs = {
-            let mut lhs = Self::add_block_agg_child(&mut builder, &block);
-            let a = lhs.public_values(&mut builder);
-            lhs.pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(a);
-            lhs
-        };
-        let rhs = {
-            let mut rhs = Self::add_block_agg_child(&mut builder, &block);
-            let b = rhs.public_values(&mut builder);
-            rhs.pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(b);
-            rhs
-        };
+        let lhs = Self::add_block_agg_child(&mut builder, &block);
+        let rhs = Self::add_block_agg_child(&mut builder, &block);
 
-        // let mut mix_vec = vec![];
-        // mix_vec.extend(&lhs_pv_hash.elements);
-        // mix_vec.extend(&rhs_pv_hash.elements);
-        // let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        let a = lhs.public_values(&mut builder);
+        let b = rhs.public_values(&mut builder);
+
+        let lhs_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(a);
+        let rhs_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(b);
+        let mut mix_vec = vec![];
+        mix_vec.extend(&lhs_pv_hash.elements);
+        mix_vec.extend(&rhs_pv_hash.elements);
+        let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
         // let mix_pv_hash = builder.constant_hash(HashOut::ZERO);
 
         //builder.connect_hashes(lhs.pv_hash, lhs_hash_circuit);
@@ -2266,13 +2263,6 @@ where
 
         log::info!("Expected: {}, actual: {}", block.circuit.common.num_public_inputs, builder.num_public_inputs());
 
-        // let inner_common_data: [_; NUM_TABLES] =
-        //     core::array::from_fn(|i| &by_table[i].final_circuits()[0].common);
-        // builder.add_gate(
-        //     ConstantGate::new(inner_common_data[0].config.num_constants),
-        //     vec![],
-        // );
-
         assert_eq!(count_public_inputs, builder.num_public_inputs());
         assert_eq!(block.circuit.common.num_public_inputs, builder.num_public_inputs(), "Block aggregation circuit and block base case circuit must have same number of public inputs.");
         dbg!("Now attempting to build circuit.");
@@ -2281,7 +2271,8 @@ where
             circuit,
             lhs,
             rhs,
-            //mix_pv_hash,
+            mix_pv_hash,
+            dummy_pis: padding_pis,
             cyclic_vk,
         }
     }
