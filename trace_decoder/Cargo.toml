@@ -31,7 +31,7 @@ plonky2 = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
-smt_trie = { workspace = true }                    # TODO(0xaatif): this is insane
+smt_trie = { workspace = true }
 thiserror = { workspace = true }
 u4 = { workspace = true }
 winnow = { workspace = true }
