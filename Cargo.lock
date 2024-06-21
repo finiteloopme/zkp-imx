@@ -1346,6 +1346,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-default"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b396d1f76d455557e1218ec8066ae14bba60b4b36ecd55577ba979f5db7ecaa"
+
+[[package]]
 name = "const-hex"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3252,6 +3258,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nunny"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14322bc44ac32006482d77e39a75b84e62f0f934b54583434724d21dd555d8a1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "object"
 version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4665,6 +4680,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
+name = "smt_trie"
+version = "0.1.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/type2#24639a7562debf5c17f16067f9c330e2eb18c3ee"
+dependencies = [
+ "bytes",
+ "enum-as-inner",
+ "ethereum-types",
+ "hex",
+ "hex-literal",
+ "keccak-hash 0.10.0",
+ "log",
+ "num-traits",
+ "parking_lot",
+ "plonky2",
+ "rand",
+ "rlp",
+ "serde",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "socket2"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5128,26 +5165,35 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 name = "trace_decoder"
 version = "0.4.0"
 dependencies = [
+ "anyhow",
+ "bitflags 2.5.0",
+ "bitvec",
  "bytes",
  "ciborium",
  "ciborium-io",
  "criterion",
+ "either",
  "enum-as-inner",
  "enumn",
  "ethereum-types",
  "evm_arithmetization",
  "hex",
  "hex-literal",
+ "itertools 0.13.0",
  "keccak-hash 0.10.0",
  "log",
  "mpt_trie",
- "pretty_env_logger",
+ "nunny",
+ "plonky2",
  "rlp",
  "rlp-derive",
  "serde",
  "serde_json",
  "serde_with",
+ "smt_trie",
  "thiserror",
+ "u4",
+ "winnow 0.6.13",
 ]
 
 [[package]]
@@ -5223,6 +5269,16 @@ name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
+
+[[package]]
+name = "u4"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a81a0090be4640dfd1a65a078a5a0c1eaa724340387d72b6b4c7fe50f87bb2d0"
+dependencies = [
+ "const-default",
+ "serde",
+]
 
 [[package]]
 name = "ucd-trie"
