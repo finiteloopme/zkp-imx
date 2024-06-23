@@ -562,8 +562,19 @@ fn test_three_to_one_block_aggregation_ivc() -> anyhow::Result<()> {
     Ok(())
 }
 
+
+
+/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"
+/// cargo test --release -- --nocapture four_to_one
+/// Aggregate a sequential /// proof containing three proofs with the structure `((A,B),(C,D))`.
+///
+///  A    B    C    D    Blockproofs (base case)
+///   \  /      \  /
+///  (A, B)    (C, D)    Two-to-one block aggregation proofs
+///     \       /
+///   ((A,B), (C,D))     Two-to-one block aggregation proofs
 #[test]
-fn test_three_to_one_block_aggregation_binop() -> anyhow::Result<()> {
+fn test_block_aggregation_binop_4_blocks() -> anyhow::Result<()> {
     init_logger();
     log::info!("Meta Stage 0:  Setup");
     let all_stark = AllStark::<F, D>::default();
@@ -604,9 +615,158 @@ fn test_three_to_one_block_aggregation_binop() -> anyhow::Result<()> {
     let aggproof0123 = all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &aggproof23, true)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof0123)?;
 
-    assert!(false, "Hoooray!!, 4-block aggregation was verified");
     Ok(())
 }
+
+
+
+#[test]
+fn test_block_aggregation_binop_same_block_twice() -> anyhow::Result<()> {
+    init_logger();
+    log::info!("Meta Stage 0:  Setup");
+    let all_stark = AllStark::<F, D>::default();
+    let config = StarkConfig::standard_fast_config();
+
+    // Preprocess all circuits.
+    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+        &all_stark,
+        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
+        &config,
+    );
+
+    let mut timing = TimingTree::new("prove root first", log::Level::Info);
+
+    log::info!("Meta Stage 1:  Compute block proofs");
+    let some_timestamps = [42, 42];
+    let unrelated_block_proofs = some_timestamps
+        .iter()
+        .map(|&ts| {
+            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
+        })
+        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+
+    log::info!("Meta Stage 2:  Verify block proofs");
+    unrelated_block_proofs
+        .iter()
+        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+
+    log::info!("Meta Stage 3:  Aggregate block proofs");
+    let bp = unrelated_block_proofs;
+
+    let aggproof_42_42 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof_42_42)?;
+
+    Ok(())
+}
+
+
+/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"
+/// cargo test --release -- --nocapture four_to_one
+/// Aggregate a sequential /// proof containing three proofs with the structure `((A,B),(C,D))`.
+///
+///  A    B    C     Blockproofs (base case)
+///   \  /    /
+///  (A, B)  /       Two-to-one block aggregation proofs
+///     \   /
+///  ((A,B), C)     Two-to-one block aggregation proofs
+#[test]
+fn test_block_aggregation_binop_foldleft() -> anyhow::Result<()> {
+    init_logger();
+    log::info!("Meta Stage 0:  Setup");
+    let all_stark = AllStark::<F, D>::default();
+    let config = StarkConfig::standard_fast_config();
+
+    // Preprocess all circuits.
+    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+        &all_stark,
+        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
+        &config,
+    );
+
+    let mut timing = TimingTree::new("prove root first", log::Level::Info);
+
+    log::info!("Meta Stage 1:  Compute block proofs");
+    let some_timestamps = [65, 127, 42];
+    let unrelated_block_proofs = some_timestamps
+        .iter()
+        .map(|&ts| {
+            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
+        })
+        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+
+    log::info!("Meta Stage 2:  Verify block proofs");
+    unrelated_block_proofs
+        .iter()
+        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+
+    log::info!("Meta Stage 3:  Aggregate block proofs");
+    let bp = unrelated_block_proofs;
+
+    let aggproof01 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof01)?;
+
+    let aggproof012 = all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &bp[2], false)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
+
+    Ok(())
+}
+
+
+///
+///  A    B    C    Blockproofs (base case)
+///   \   \   /
+///    \  (B,C)     Two-to-one block aggregation proofs
+///     \  /
+///  (A,(B, C))     Two-to-one block aggregation proofs
+#[test]
+fn test_block_aggregation_binop_foldright() -> anyhow::Result<()> {
+    init_logger();
+    log::info!("Meta Stage 0:  Setup");
+    let all_stark = AllStark::<F, D>::default();
+    let config = StarkConfig::standard_fast_config();
+
+    // Preprocess all circuits.
+    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
+        &all_stark,
+        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
+        &config,
+    );
+
+    let mut timing = TimingTree::new("prove root first", log::Level::Info);
+
+    log::info!("Meta Stage 1:  Compute block proofs");
+    let some_timestamps = [65, 127, 42];
+    let unrelated_block_proofs = some_timestamps
+        .iter()
+        .map(|&ts| {
+            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
+        })
+        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+
+    log::info!("Meta Stage 2:  Verify block proofs");
+    unrelated_block_proofs
+        .iter()
+        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+
+    log::info!("Meta Stage 3:  Aggregate block proofs");
+    let bp = unrelated_block_proofs;
+
+    let aggproof12 = all_circuits.prove_two_to_one_block_binop(&bp[1], false, &bp[2], false)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof12)?;
+
+    let aggproof012 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &aggproof12, true)?;
+    all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
+
+    Ok(())
+}
+
+
+
+
+
+
+
+
 
 fn eth_to_wei(eth: U256) -> U256 {
     // 1 ether = 10^18 wei.
