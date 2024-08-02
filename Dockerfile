@@ -28,8 +28,6 @@ RUN apt-get update && apt-get install -y \
     # clean the image
     && rm -rf /var/lib/apt/lists/*
 
-RUN rustup component add llvm-tools-preview && cargo install cargo-pgo
-
 ARG PROFILE=release
 # forward the docker argument so that the script below can read it
 ENV PROFILE=${PROFILE}
@@ -51,12 +49,9 @@ set -eux
 # .cargo/config.toml
 cd /src
 
-mkdir -p /artifacts/pgo-profiles
-cp -r target/pgo-profiles/* /artifacts/pgo-profiles
-
 # use the cache mount
 # (we will not be able to to write to e.g `/src/target` because it is bind-mounted)
-CARGO_TARGET_DIR=/artifacts cargo pgo optimize build -- --bin worker --locked "--profile=${PROFILE}"
+CARGO_TARGET_DIR=/artifacts cargo build --locked "--profile=${PROFILE}" --all
 
 # narrow the find call to SUBDIR because if we just copy out all executables
 # we will break the cache invariant
@@ -68,13 +63,15 @@ fi
 
 # maxdepth because binaries are in the root
 # - other folders contain build scripts etc.
-find /artifacts/ -print -ls
-
 mkdir /output
+find "/artifacts/$SUBDIR" \
+    -maxdepth 1 \
+    -type f \
+    -executable \
+    -not -name '*.so' \
+    -exec cp '{}' /output \; \
+    -print
 
-cp /artifacts/x86_64-unknown-linux-gnu/release/worker /output/worker
-
-ls -lha /output
 EOF
 
 ##################
@@ -86,22 +83,20 @@ FROM debian:bullseye-slim AS final
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libjemalloc2 \
-    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # this keeps this build target agnostic to the build profile
-COPY --from=build ["/output/worker", "/usr/local/bin/"]
+COPY --from=build ["/output/rpc", "/output/leader", "/output/coordinator", "/output/worker", "/output/verifier", "/usr/local/bin/"]
 
-# # Create a non-privileged user that the app will run under.
-# # See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
-# ARG UID=10001
-# RUN adduser \
-#     --disabled-password \
-#     --gecos "" \
-#     --home "/nonexistent" \
-#     --shell "/sbin/nologin" \
-#     --no-create-home \
-#     --uid "${UID}" \
-#     user
-# USER user
-CMD ["worker"]
+# Create a non-privileged user that the app will run under.
+# See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    user
+USER user

@@ -99,6 +99,7 @@ def signal_handler(sig, frame):
 # -------------------------
 # | run the worker binary |
 # -------------------------
+print("Running the worker binary...")
 process = subprocess.Popen(WORKER_PATH)
 
 # register the signal handlers

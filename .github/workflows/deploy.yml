@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - develop
-      - pgo-rebase
+      - shanghai-2
 
 env:
   DEFAULT_TAGS: |
@@ -152,10 +152,10 @@ jobs:
           NUM_WORKERS: 1
           CPU: 55
           MEMORY: 32Gi
-          BLOCK_START: 177
-          BLOCK_END: 177
+          BLOCK_START: 801
+          BLOCK_END: 801
           OTHER_ARGS: "pgo.test.run"
-          RPC_ENDPOINT: "INTERNAL_RPC"
+          RPC_ENDPOINT: "IMX_RPC"
           CPU_THRESHOLD: 1200
         run: |-
           export USE_GKE_GCLOUD_AUTH_PLUGIN=True
@@ -232,7 +232,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: coordinator.Dockerfile
+          file: Dockerfile
           push: true
           tags: ${{ steps.leader-meta.outputs.tags }}
           labels: ${{ steps.leader-meta.outputs.labels }}
