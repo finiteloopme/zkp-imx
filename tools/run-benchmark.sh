@@ -185,7 +185,7 @@ done
 # Build out the request parameters
 folder_name=$(printf "%s/%s" "$ENVIRONMENT" "$SUBFOLDER_NAME")
 csv_file_name=$(printf "%s.%s.%s.%s.%s.%scpu.%sworkers.csv" "$other_args" "$block_start" "$block_end" "$machine_type" "$CPU_PLATFORM" "$cpu_request" "$num_workers")
-post_body=$(printf '{"block_interval":"%s..=%s","block_source":{"ZeroBinRpc":{"rpc_url":"%s"}},"benchmark_output":{"GoogleCloudStorageCsv":{"file_name":"%s/%s","bucket":"zkevm-csv"}}}' "$block_start" "$block_end" "$RPC_ADDRESS" "$folder_name" "$csv_file_name")
+post_body=$(printf '{"run_name":"%s","RPC":{"rpc_url":"%s","block_interval":"%s..=%s"},"benchmark_output":{"GoogleCloudStorageCsv":{"file_name":"%s/%s","bucket":"zkevm-csv"}},"prover_config":{"batch_size":10,"max_cpu_len_log":19}}' "$csv_file_name" "$RPC_ADDRESS" "$block_start" "$block_end" "$folder_name" "$csv_file_name")
 
 # Run the benchmark test
 echo "Triggering benchmark test..."
